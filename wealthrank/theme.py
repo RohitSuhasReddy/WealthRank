@@ -100,6 +100,21 @@ a{color:var(--mellow)}
 .wr-accent{color:#ED7044}
 .wr-panel-head{font-size:13px;font-weight:700;letter-spacing:-.01em;margin:7px 0 12px}
 .wr-note{padding:17px 21px;border-left:2px solid var(--burnt);background:rgba(210,58,0,.09);font-size:12px;line-height:1.6;color:var(--muted);margin:13px 0 22px}
+.wr-owned-wrap{display:flex;align-items:stretch;flex-wrap:wrap;gap:12px;
+ border:1px solid rgba(210,58,0,.38);border-radius:17px;
+ background:linear-gradient(110deg,rgba(210,58,0,.12),rgba(16,9,7,.75));
+ padding:17px 18px;margin:20px 0 15px}
+.wr-owned-heading{width:100%;font-size:10px;letter-spacing:.15em;font-weight:800;color:#F28A5F;margin-bottom:3px}
+.wr-owned-item{min-width:180px;flex:1 1 185px;display:flex;flex-direction:column;gap:8px;
+ padding:13px 15px;border:1px solid rgba(254,255,250,.14);border-radius:12px;
+ background:rgba(0,0,0,.37);transition:border-color .3s,transform .3s}
+.wr-owned-item:hover{border-color:#D23A00;transform:translateY(-3px)}
+.wr-owned-item strong{font-size:17px;font-weight:700;letter-spacing:-.03em}
+.wr-owned-item span{font-size:9px;letter-spacing:.13em;font-weight:800;color:#F18C62}
+.wr-owned-item small{font-size:11px;color:rgba(254,255,250,.65)}
+.wr-owned-selection{border:1px solid rgba(210,58,0,.5);border-radius:13px;
+ background:rgba(210,58,0,.11);padding:15px 19px;margin:13px 0 18px;
+ font-size:12px;font-weight:700;color:#FEFFFA}
 .wr-rec{border:1px solid var(--line);border-radius:16px;background:linear-gradient(112deg,#17100D,#050505);
  padding:22px 25px;margin:9px 0;transition:transform .3s,border-color .3s}
 .wr-rec:hover{transform:translateX(6px);border-color:rgba(210,58,0,.65)}

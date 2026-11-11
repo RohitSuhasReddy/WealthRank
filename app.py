@@ -25,7 +25,7 @@ from wealthrank.evaluation import run_synthetic_lab
 from wealthrank.fire import FireInputs, fire_target_today, project_fire, real_return, retirement_snapshot
 from wealthrank.money import format_inr, parse_inr
 from wealthrank.navigation import (
-    current_page, home_return, home_brand, inject_navigation_css,
+    navigate, current_page, home_return, home_brand, inject_navigation_css,
     page_header, top_navigation, universe,
 )
 from wealthrank.screens import ranked_discovery, stock_analytics
@@ -89,13 +89,31 @@ def percent(value: float | None, signed: bool = False) -> str:
     return f"{value:+.1%}" if signed else f"{value:.1%}"
 
 
+EDITOR_COLUMNS = ["Type", "Ticker", "Quantity", "Avg Buy Price", "Purchase Date"]
+
+
 def default_holdings() -> pd.DataFrame:
-    # Example *quantities* only. Prices and analytics are never mocked.
-    return pd.DataFrame([
-        {"Type": "Stock", "Ticker": "RELIANCE.NS", "Quantity": 6.0, "Avg Buy Price": 0.0},
-        {"Type": "Stock", "Ticker": "INFY.NS", "Quantity": 8.0, "Avg Buy Price": 0.0},
-        {"Type": "Stock", "Ticker": "ICICIBANK.NS", "Quantity": 5.0, "Avg Buy Price": 0.0},
-    ])
+    """Start empty: sample tickers must never reappear after a user uploads data."""
+    return pd.DataFrame(columns=EDITOR_COLUMNS)
+
+
+def portfolio_draft_frame(rows: list[dict]) -> pd.DataFrame:
+    """Rebuild the editor from durable session holdings, not from a destroyed uploader."""
+    frame = pd.DataFrame(rows, columns=EDITOR_COLUMNS)
+    if not frame.empty:
+        frame["Avg Buy Price"] = frame["Avg Buy Price"].map(
+            lambda v: format_inr(v, decimals=True)
+            if isinstance(v, (int, float)) and pd.notna(v) else str(v or "")
+        )
+    return frame
+
+
+def portfolio_draft_rows(frame: pd.DataFrame) -> list[dict]:
+    """Preserve incomplete in-progress editor rows across Streamlit page changes."""
+    if frame.empty:
+        return []
+    return frame.astype(object).where(pd.notna(frame), "").to_dict("records")
+
 
 
 def upload_data(upload) -> pd.DataFrame:
@@ -110,79 +128,126 @@ def upload_data(upload) -> pd.DataFrame:
 def display_portfolio() -> tuple[list[dict], str, list[str]]:
     section(
         "portfolio", "01", "GET STARTED", "Your holdings.<br><em>In focus.</em>",
-        "Import a portfolio or edit the starter holdings. Every displayed market value is fetched from public data.",
+        "Upload a file or add your own holdings. Your portfolio stays in this browser session as you explore."
     )
-    left, right = st.columns([1.6, 1], gap="large")
+    if "portfolio_draft" not in st.session_state:
+        st.session_state["portfolio_draft"] = []
+    left, right = st.columns([1.65, 1], gap="large")
     with left:
-        st.markdown('<div class="wr-miniheading">THE PORTFOLIO EDITOR</div>', unsafe_allow_html=True)
+        st.markdown('<div class="wr-miniheading">THE PORTFOLIO EDITOR</div>',
+                    unsafe_allow_html=True)
         uploaded = st.file_uploader(
-            "Import CSV / Excel (Ticker, Quantity, Avg Buy Price; optional Type)",
-            type=["csv", "xlsx"], help="Set Type to Mutual fund and Ticker to the AMFI scheme code for mutual funds.",
+            "Import CSV / Excel (Ticker, Quantity, optional Avg Buy Price, Purchase Date and Type)",
+            type=["csv", "xlsx"], key="portfolio_upload",
+            help="Type = Stock or Mutual fund. Mutual funds use AMFI scheme codes."
         )
-        try:
-            starter = upload_data(uploaded) if uploaded else default_holdings()
-            normalized = normalize_holdings(starter)
-            edit_frame = pd.DataFrame(normalized, columns=["Type", "Ticker", "Quantity", "Avg Buy Price", "Purchase Date"])
-            edit_frame["Avg Buy Price"] = edit_frame["Avg Buy Price"].map(
-                lambda amount: format_inr(amount, decimals=True)
-            )
-            unique_key = hashlib.sha256(uploaded.getvalue()).hexdigest()[:12] if uploaded else "starter"
-            editor = st.data_editor(
-                edit_frame, num_rows="dynamic", hide_index=True, use_container_width=True,
-                key=f"editor_{unique_key}",
-                column_config={
-                    "Type": st.column_config.SelectboxColumn("Type", options=["Stock", "Mutual fund"], required=True),
-                    "Ticker": st.column_config.TextColumn("Ticker / AMFI code", help="e.g. INFY.NS or 125497"),
-                    "Quantity": st.column_config.NumberColumn("Units", min_value=0.00001, step=1.0, format="%.4f"),
-                    "Avg Buy Price": st.column_config.TextColumn(
-                        "Avg buy price (commas allowed)",
-                        help="Examples: 1,250.00 or 1,25,000.00. Use quote currency.",
-                    ),
-                    "Purchase Date": st.column_config.TextColumn(
-                        "Purchase date", help="Optional YYYY-MM-DD.",
-                    ),
-                },
-            )
-        except Exception as exc:
-            st.error(f"Unable to parse portfolio: {exc}")
-            editor = pd.DataFrame()
+        if uploaded is not None:
+            digest = hashlib.sha256(uploaded.getvalue()).hexdigest()
+            # Import once per distinct file; reruns and returning from another
+            # page must never overwrite work already edited in the table.
+            if st.session_state.get("portfolio_import_hash") != digest:
+                try:
+                    imported = normalize_holdings(upload_data(uploaded))
+                except Exception as exc:
+                    st.error(f"Could not import {uploaded.name}: {exc}")
+                else:
+                    st.session_state["portfolio_draft"] = imported
+                    st.session_state["portfolio_import_hash"] = digest
+                    st.session_state["portfolio_source_name"] = uploaded.name
+                    st.session_state.pop("portfolio_editor", None)
+
+        source = st.session_state.get("portfolio_source_name")
+        if source:
+            st.caption(f"Current portfolio: {source} · retained while switching sections")
+        elif st.session_state["portfolio_draft"]:
+            st.caption("Your edited holdings are retained while switching sections.")
+        else:
+            st.caption("No sample stocks inserted. Upload your Excel or add rows below.")
+
+        editable = portfolio_draft_frame(st.session_state["portfolio_draft"])
+        editor = st.data_editor(
+            editable, num_rows="dynamic", hide_index=True,
+            use_container_width=True, key="portfolio_editor",
+            column_config={
+                "Type": st.column_config.SelectboxColumn(
+                    "Type", options=["Stock", "Mutual fund"], required=True
+                ),
+                "Ticker": st.column_config.TextColumn(
+                    "Ticker / AMFI code", help="e.g. INFY.NS, AAPL or an AMFI code"
+                ),
+                "Quantity": st.column_config.NumberColumn(
+                    "Units", min_value=0.00001, step=1.0, format="%.4f"
+                ),
+                "Avg Buy Price": st.column_config.TextColumn(
+                    "Avg buy price", help="Optional; commas accepted (quote currency)"
+                ),
+                "Purchase Date": st.column_config.TextColumn(
+                    "Purchase date", help="Optional YYYY-MM-DD"
+                ),
+            },
+        )
+        # This is the *canonical*, widget-independent state. File uploader and
+        # data editor widgets are destroyed when a Streamlit page is hidden.
+        st.session_state["portfolio_draft"] = portfolio_draft_rows(editor)
+
     with right:
-        st.markdown('<div class="wr-miniheading">PERSONALISE YOUR VIEW</div>', unsafe_allow_html=True)
+        st.markdown('<div class="wr-miniheading">PERSONALISE YOUR VIEW</div>',
+                    unsafe_allow_html=True)
         choices = ["Moderate", "Conservative", "Aggressive"]
-        previous_risk = st.session_state.get("saved_risk", "Moderate")
-        risk = st.selectbox("Your risk preference", choices,
-                            index=choices.index(previous_risk) if previous_risk in choices else 0)
+        risk = st.selectbox(
+            "Your risk preference", choices,
+            index=choices.index(st.session_state.get("saved_risk", "Moderate")),
+            key="portfolio_risk",
+        )
         preferred_sectors = st.multiselect(
             "Preferred sectors (optional)", sorted(set(STOCK_SECTORS.values())),
             default=st.session_state.get("saved_sectors", []),
+            key="portfolio_sectors",
         )
-        note("Stock tickers use Yahoo Finance codes (for example, INFY.NS or AAPL). "
-             "Mutual funds use an AMFI scheme code to avoid mixing direct, regular or IDCW plans.")
+        # Persist these *before* potentially rerunning to Analytics.
+        st.session_state["saved_risk"] = risk
+        st.session_state["saved_sectors"] = preferred_sectors
+        note("Stocks use exchange tickers such as INFY.NS or AAPL. "
+             "Mutual funds use exact AMFI codes to distinguish plan variants.")
         st.download_button(
-            "↓ Download CSV template", data=default_holdings().to_csv(index=False),
-            file_name="wealthrank_portfolio_template.csv", mime="text/csv",
-            use_container_width=True,
+            "↓ Download blank CSV template",
+            data=default_holdings().to_csv(index=False),
+            file_name="wealthrank_portfolio_template.csv",
+            mime="text/csv", use_container_width=True,
         )
+        st.caption("To replace your holdings, upload a different file or edit the table. "
+                   "Nothing is saved to a server account.")
 
-    run = st.button("Analyse my portfolio  ↗", type="primary", use_container_width=True)
-    if run:
+    if st.button("Analyse my portfolio ↗", type="primary",
+                 use_container_width=True, key="analyse_portfolio"):
         try:
             holdings = normalize_holdings(editor)
+        except Exception as exc:
+            st.error(f"Please correct the portfolio inputs: {exc}")
+        else:
             if not holdings:
-                st.warning("Enter at least one holding with a positive quantity.")
+                st.warning("Add at least one valid holding or upload a portfolio.")
             else:
-                with st.status("Fetching verified prices and NAVs…", expanded=True) as status:
-                    st.write("Reading stocks from Yahoo Finance and funds from MFapi.in.")
+                with st.status("Fetching observed prices and NAVs…", expanded=True) as status:
                     positions, errors = resolve_portfolio(
                         holdings, cached_stock, cached_fund, cached_fx
                     )
-                    st.session_state["positions"] = positions
-                    st.session_state["portfolio_errors"] = errors
-                    st.session_state["recommendations"] = []
-                    st.session_state["recommendation_assets"] = []
-                    status.update(label="Portfolio refresh complete", state="complete", expanded=False)
-        except Exception as exc:
-            st.error(f"Please correct the portfolio inputs: {exc}")
+                    if positions:
+                        st.session_state["positions"] = positions
+                        st.session_state["portfolio_errors"] = errors
+                        st.session_state["recommendations"] = []
+                        status.update(label="Portfolio analysis complete",
+                                      state="complete", expanded=False)
+                    else:
+                        status.update(label="No holdings could be valued",
+                                      state="error", expanded=True)
+                        for error in errors:
+                            st.warning(error)
+                if positions:
+                    # A successful click must go directly to stock analytics.
+                    navigate("analytics")
+                    st.rerun()
+
     return st.session_state.get("positions", []), risk, preferred_sectors
 
 

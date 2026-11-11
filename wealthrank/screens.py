@@ -5,6 +5,8 @@ state by the root app and reused in analytics / discovery / FIRE.
 """
 from __future__ import annotations
 
+import html
+
 import pandas as pd
 import streamlit as st
 
@@ -168,6 +170,38 @@ def ranked_discovery(
         st.caption(f"Top 10 observed stocks · {risk} risk preference")
 
     symbols = tickers_for_sector(market, sector)
+    matching = {sym.upper() for sym in symbols}
+    owned_here = [
+        p for p in positions
+        if p.get("asset_class") == "Stock"
+        and str(p.get("ticker", "")).upper() in matching
+    ]
+    # User holdings are displayed even if the free-data provider is offline.
+    if owned_here:
+        cards = []
+        for holding in owned_here:
+            label = html.escape(str(holding.get("ticker", "Stock")))
+            units = float(holding.get("quantity", 0))
+            market_value = float(holding.get("value_inr", 0))
+            cards.append(
+                '<div class="wr-owned-item">'
+                f'<strong>{label}</strong><span>ALREADY OWNED</span>'
+                f'<small>{units:,.4f} units · ₹{market_value:,.0f} value</small>'
+                '</div>'
+            )
+        st.markdown(
+            '<div class="wr-owned-wrap"><div class="wr-owned-heading">'
+            '● ALREADY IN YOUR PORTFOLIO · ' + html.escape(sector) + '</div>'
+            + ''.join(cards) + '</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "These stocks are highlighted separately and excluded from new-stock rankings. "
+            "You can still inspect their charts in the deep-dive section."
+        )
+    else:
+        st.caption(f"No verified holdings in {sector} yet.")
+
     st.caption(f"Screening {len(symbols)} curated {market} {sector} candidates. "
                "Selecting another category immediately recalculates its own ranking.")
     refresh = st.button("↻ Refresh current category", key="refresh_category")
@@ -219,6 +253,7 @@ def ranked_discovery(
         st.caption(f"Benchmark temporarily unavailable: {exc}. Alpha and beta shown as —.")
 
     lookup = {asset["ticker"]: asset for asset in assets}
+    owned_lookup = {asset["ticker"]: asset for asset in owned_here}
     table = []
     for rank, item in enumerate(ranked, 1):
         details = _stock_snapshot(lookup[item["ticker"]], benchmark, rf)
@@ -245,17 +280,32 @@ def ranked_discovery(
                 "Score / 100", min_value=0, max_value=100, format="%.1f"
             )},
         )
+        by_rank = {row["Stock"]: row["Rank"] for row in table}
+        detail_tickers = list(by_rank) + [
+            ticker for ticker in owned_lookup if ticker not in by_rank
+        ]
         chosen = st.selectbox(
-            "Stock deep-dive", [row["Stock"] for row in table],
+            "Stock deep-dive", detail_tickers,
             key=f"ranked_detail_{market}_{sector}",
-            format_func=lambda symbol: f"#{next(row['Rank'] for row in table if row['Stock'] == symbol)} · {symbol}",
+            format_func=lambda symbol: (
+                f"✓ ALREADY OWNED · {symbol}" if symbol in owned_lookup
+                else f"#{by_rank[symbol]} · {symbol}"
+            ),
         )
-        entry = next(item for item in ranked if item["ticker"] == chosen)
-        recommendation_card(entry, next(i for i, item in enumerate(ranked, 1)
-                                        if item["ticker"] == chosen))
-        if entry["flags"]:
-            st.warning("Risk considerations: " + " · ".join(entry["flags"]))
-        asset = lookup[chosen]
+        if chosen in owned_lookup:
+            asset = owned_lookup[chosen]
+            st.markdown(
+                '<div class="wr-owned-selection">✓ ALREADY OWNED · '
+                + html.escape(chosen)
+                + ' — held in your portfolio, not ranked as a new stock idea.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            asset = lookup[chosen]
+            entry = next(item for item in ranked if item["ticker"] == chosen)
+            recommendation_card(entry, by_rank[chosen])
+            if entry["flags"]:
+                st.warning("Risk considerations: " + " · ".join(entry["flags"]))
         detail = _stock_snapshot(asset, benchmark, rf)
         _metric_row(detail, asset, benchmark_symbol, rf)
         timeline, scaling = st.columns([1.25, 1], gap="medium")
@@ -278,8 +328,9 @@ def ranked_discovery(
     with st.expander("Universe, scoring, and unavailable tickers", expanded=False):
         st.write(
             f"The {market} / {sector} category starts with {len(symbols)} "
-            "curated tickers. Stocks already owned, missing quotes, or without 60+ "
-            "observed returns are not ranked. When fewer than ten have usable "
+            "curated tickers. Stocks already owned are highlighted separately; "
+            "unavailable quotes or fewer than 60+ returns cannot be ranked. "
+            "When fewer than ten have usable "
             "data, the screen reports the actual available count rather than inventing entries."
         )
         st.write(

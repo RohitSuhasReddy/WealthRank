@@ -48,7 +48,7 @@ def inject_navigation_css() -> None:
 .wr-space-sub{color:#BBAEA8;font-size:14px;line-height:1.7;max-width:600px;margin:0 auto;animation:wr-arrive 1.2s ease both}
 /* The previous absolute-positioned Streamlit widgets caused the screenshot's broken layout.
    Three real rows and columns now determine every planet position. */
-.st-key-universe{position:relative!important;isolation:isolate;max-width:1050px;margin:7px auto 0!important;padding:7px 28px 10px!important;overflow:hidden!important;background:radial-gradient(ellipse at 50% 50%,rgba(210,58,0,.16),transparent 66%)}
+.st-key-universe{position:relative!important;isolation:isolate;max-width:1050px;margin:7px auto 0!important;padding:7px 28px 10px!important;overflow:visible!important;background:radial-gradient(ellipse at 50% 50%,rgba(210,58,0,.16),transparent 66%)}
 .st-key-universe::before,.st-key-universe::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-19deg);border:1px solid rgba(254,255,250,.18);border-radius:50%;pointer-events:none;z-index:0}
 .st-key-universe::before{width:92%;height:300px}
 .st-key-universe::after{width:71%;height:235px;border-color:rgba(210,58,0,.36);transform:translate(-50%,-50%) rotate(22deg)}
@@ -66,7 +66,14 @@ def inject_navigation_css() -> None:
 .st-key-universe .st-key-planet_analytics button{animation-delay:-1.5s!important}
 .st-key-universe .st-key-planet_lab button{animation-delay:-3.2s!important}
 .st-key-universe .st-key-planet_discover button{animation-delay:-4s!important}
-.st-key-universe .st-key-planet_fire button{animation-delay:-5s!important;background:radial-gradient(circle at 25% 20%,#F38A56,#903011 45%,#080505 90%)!important}
+.st-key-universe .st-key-planet_fire button{
+ animation-delay:-5s!important;overflow:visible!important;
+ background:radial-gradient(circle at 29% 20%,#FFB979 0%,#F47830 22%,#D23A00 49%,#7A220A 76%,#270A06 100%)!important;
+ box-shadow:inset -12px -15px 28px rgba(30,5,2,.58),
+ 0 0 26px rgba(247,104,38,.42),0 0 58px rgba(210,58,0,.30),
+ 0 0 110px rgba(210,58,0,.13)!important;
+ background-clip:padding-box!important;
+}
 .st-key-universe [class*="st-key-planet_"] button:hover{transform:scale(1.12)!important;border-color:#FFA46D!important;box-shadow:0 0 32px rgba(255,124,44,.7),0 0 80px rgba(210,58,0,.4),inset -13px -14px 30px #170A05!important}
 .st-key-universe [class*="st-key-planet_"] button:focus-visible{outline:3px solid #FEFFFA!important;outline-offset:4px!important}
 .wr-universe-tip{text-align:center;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#998B85;margin:7px 0 32px}
@@ -161,19 +168,19 @@ def universe() -> None:
             left, _, right = st.columns([1, 1, 1], gap="small", vertical_alignment="center")
             with left:
                 with st.container(key="planet_portfolio"):
-                    st.button("01 · Portfolio", key="orbit_portfolio",
+                    st.button("Portfolio", key="orbit_portfolio",
                               on_click=navigate, args=("portfolio",),
                               help="Holdings and net worth")
             with right:
                 with st.container(key="planet_analytics"):
-                    st.button("02 · Analytics", key="orbit_analytics",
+                    st.button("Analytics", key="orbit_analytics",
                               on_click=navigate, args=("analytics",),
                               help="Stock alpha, beta and returns")
         with st.container(key="solar_row_middle"):
             left, center, right = st.columns([1, 1, 1], gap="small", vertical_alignment="center")
             with left:
                 with st.container(key="planet_lab"):
-                    st.button("05 · Model Lab", key="orbit_lab",
+                    st.button("Model Lab", key="orbit_lab",
                               on_click=navigate, args=("lab",),
                               help="Model evaluation")
             with center:
@@ -184,14 +191,14 @@ def universe() -> None:
                 )
             with right:
                 with st.container(key="planet_discover"):
-                    st.button("03 · Discover", key="orbit_discover",
+                    st.button("Discover", key="orbit_discover",
                               on_click=navigate, args=("discover",),
                               help="Up to ten ranked stock ideas")
         with st.container(key="solar_row_bottom"):
             _, center, _ = st.columns([1, 1, 1], gap="small", vertical_alignment="center")
             with center:
                 with st.container(key="planet_fire"):
-                    st.button("04 · FIRE", key="orbit_fire",
+                    st.button("FIRE", key="orbit_fire",
                               on_click=navigate, args=("fire",),
                               help="Retirement projection calculator")
     st.markdown(
