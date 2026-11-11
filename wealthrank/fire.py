@@ -45,6 +45,33 @@ def fire_target_today(inputs: FireInputs) -> float:
     return inputs.monthly_expenses * 12 / inputs.withdrawal_rate
 
 
+def retirement_expenses(inputs: FireInputs, retirement_age: int) -> dict[str, float]:
+    """Same real lifestyle as today, adjusted only for projected inflation.
+
+    No discretionary spending change is assumed. This returns nominal expenses
+    at retirement and the corpus needed at the chosen withdrawal rate.
+    """
+    validate_fire(inputs)
+    if not inputs.current_age < retirement_age <= 100:
+        raise ValueError("Retirement age must be after current age and at most 100.")
+    years = retirement_age - inputs.current_age
+    monthly = inputs.monthly_expenses * (1 + inputs.inflation) ** years
+    annual = 12 * monthly
+    return {
+        "years": float(years),
+        "monthly": float(monthly),
+        "annual": float(annual),
+        "corpus": float(annual / inputs.withdrawal_rate),
+    }
+
+
+def first_year_withdrawal(corpus: float, withdrawal_rate: float) -> float:
+    """First-year annual budget implied by the chosen withdrawal percentage."""
+    if corpus < 0 or not 0 < withdrawal_rate <= 1:
+        raise ValueError("Corpus must be non-negative; withdrawal rate must be (0, 1].")
+    return float(corpus * withdrawal_rate)
+
+
 def project_fire(inputs: FireInputs, years: int | None = None) -> tuple[pd.DataFrame, float | None]:
     """Yearly trace plus first monthly FIRE crossing in years (or None).
 
