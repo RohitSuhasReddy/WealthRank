@@ -18,15 +18,19 @@ from wealthrank.charts import (
     fire_projection_chart, performance_chart,
 )
 from wealthrank.data import (
-    STOCK_SECTORS, fetch_fund, fetch_stock, fetch_usd_inr,
-    normalize_holdings, price_in_inr, resolve_portfolio, search_funds,
+    STOCK_SECTORS, fetch_fund, fetch_stock, fetch_stock_batch, fetch_usd_inr,
+    normalize_holdings, resolve_portfolio, search_funds,
 )
 from wealthrank.evaluation import run_synthetic_lab
 from wealthrank.fire import FireInputs, fire_target_today, project_fire, real_return, retirement_snapshot
-from wealthrank.recommendations import (
-    FUND_QUERIES, candidate_universe, rank_candidates, select_fund_search_result,
+from wealthrank.money import format_inr, parse_inr
+from wealthrank.navigation import (
+    current_page, home_return, inject_navigation_css,
+    page_header, top_navigation, universe,
 )
-from wealthrank.theme import footer, hero, inject_css, metrics, note, recommendation_card, section
+from wealthrank.screens import ranked_discovery, stock_analytics
+from wealthrank.networth import net_worth_breakdown
+from wealthrank.theme import footer, inject_css, metrics, note, section
 
 
 st.set_page_config(
@@ -48,6 +52,11 @@ def cached_fund(code: str) -> dict:
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_fx() -> pd.Series:
     return fetch_usd_inr()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_candidate_batch(symbols: tuple[str, ...]) -> tuple[list[dict], list[str]]:
+    return fetch_stock_batch(list(symbols))
 
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
@@ -113,6 +122,9 @@ def display_portfolio() -> tuple[list[dict], str, list[str]]:
             starter = upload_data(uploaded) if uploaded else default_holdings()
             normalized = normalize_holdings(starter)
             edit_frame = pd.DataFrame(normalized, columns=["Type", "Ticker", "Quantity", "Avg Buy Price"])
+            edit_frame["Avg Buy Price"] = edit_frame["Avg Buy Price"].map(
+                lambda amount: format_inr(amount, decimals=True)
+            )
             unique_key = hashlib.sha256(uploaded.getvalue()).hexdigest()[:12] if uploaded else "starter"
             editor = st.data_editor(
                 edit_frame, num_rows="dynamic", hide_index=True, use_container_width=True,
@@ -121,7 +133,10 @@ def display_portfolio() -> tuple[list[dict], str, list[str]]:
                     "Type": st.column_config.SelectboxColumn("Type", options=["Stock", "Mutual fund"], required=True),
                     "Ticker": st.column_config.TextColumn("Ticker / AMFI code", help="e.g. INFY.NS or 125497"),
                     "Quantity": st.column_config.NumberColumn("Units", min_value=0.00001, step=1.0, format="%.4f"),
-                    "Avg Buy Price": st.column_config.NumberColumn("Avg buy price (optional)", min_value=0.0, format="%.2f"),
+                    "Avg Buy Price": st.column_config.TextColumn(
+                        "Avg buy price (commas allowed)",
+                        help="Examples: 1,250.00 or 1,25,000.00. Use quote currency.",
+                    ),
                 },
             )
         except Exception as exc:
@@ -129,8 +144,14 @@ def display_portfolio() -> tuple[list[dict], str, list[str]]:
             editor = pd.DataFrame()
     with right:
         st.markdown('<div class="wr-miniheading">PERSONALISE YOUR VIEW</div>', unsafe_allow_html=True)
-        risk = st.selectbox("Your risk preference", ["Moderate", "Conservative", "Aggressive"])
-        preferred_sectors = st.multiselect("Preferred sectors (optional)", sorted(set(STOCK_SECTORS.values())))
+        choices = ["Moderate", "Conservative", "Aggressive"]
+        previous_risk = st.session_state.get("saved_risk", "Moderate")
+        risk = st.selectbox("Your risk preference", choices,
+                            index=choices.index(previous_risk) if previous_risk in choices else 0)
+        preferred_sectors = st.multiselect(
+            "Preferred sectors (optional)", sorted(set(STOCK_SECTORS.values())),
+            default=st.session_state.get("saved_sectors", []),
+        )
         note("Stock tickers use Yahoo Finance codes (for example, INFY.NS or AAPL). "
              "Mutual funds use an AMFI scheme code to avoid mixing direct, regular or IDCW plans.")
         st.download_button(
@@ -223,151 +244,22 @@ def display_analytics(positions: list[dict]) -> None:
         st.warning(message)
 
 
-def load_candidate_assets(positions: list[dict]) -> tuple[list[dict], list[str]]:
-    currency_weight = {
-        c: sum(p["value_inr"] for p in positions if p["currency"] == c)
-        for c in ("INR", "USD")
-    }
-    preferred_currency = max(currency_weight, key=currency_weight.get)
-    held = {p["ticker"].upper() for p in positions}
-    symbols = [s for s in candidate_universe(preferred_currency) if s not in held][:8]
-    candidates = []
-    problems = []
-    fx = None
-    for ticker in symbols:
-        try:
-            asset = cached_stock(ticker)
-            if asset["currency"] == "USD" and fx is None:
-                fx = cached_fx()
-            record = dict(asset)
-            record["history_inr"] = price_in_inr(asset, fx)
-            candidates.append(record)
-        except Exception as exc:
-            problems.append(f"{ticker}: {exc}")
-    if preferred_currency == "INR":
-        for query in FUND_QUERIES:
-            try:
-                matching = cached_fund_search(query)
-                code = select_fund_search_result(matching)
-                if not code or code in held:
-                    continue
-                asset = cached_fund(code)
-                record = dict(asset)
-                record["history_inr"] = price_in_inr(asset)
-                candidates.append(record)
-            except Exception as exc:
-                problems.append(f"{query}: {exc}")
-    return candidates, problems
-
-
-def display_recommendations(positions: list[dict], risk: str, preferred_sectors: list[str]) -> None:
-    section(
-        "discover", "03", "THE DISCOVERY ENGINE", "Find your<br><em>next perspective.</em>",
-        "Ranked ideas, similarity and diversification, transparent scores, and filters that can reject unsuitable candidates.",
-    )
-    if not positions:
-        note("Analyse a portfolio to activate the live recommendation engine.")
-        return
-    c1, c2, c3 = st.columns([1, 1, 1], gap="medium")
-    with c1:
-        mode = st.radio("Recommendation style", ["Diversifying", "Similar"], horizontal=True)
-    with c2:
-        limit = st.select_slider("Ideas to show", options=[3, 4, 5], value=5)
-    with c3:
-        st.markdown('<div class="wr-miniheading">DATA-BASED UNIVERSE</div>', unsafe_allow_html=True)
-        st.caption("Curated liquid-equity shortlist + selected Indian MF plans. Not the entire market.")
-
-    if st.button("Discover matches  ↗", type="primary", use_container_width=True):
-        with st.status("Screening the candidate universe…", expanded=True) as status:
-            candidates, problems = load_candidate_assets(positions)
-            st.write(f"Evaluated {len(candidates)} candidates with obtainable data.")
-            st.session_state["recommendation_assets"] = candidates
-            st.session_state["candidate_errors"] = problems
-            status.update(label="Screening finished", state="complete", expanded=False)
-
-    candidates = st.session_state.get("recommendation_assets", [])
-    if candidates:
-        ranked, rejected = rank_candidates(
-            positions, candidates, risk, mode, limit=limit,
-            preferred_sectors=preferred_sectors,
-        )
-        st.session_state["recommendations"] = ranked
-        metrics([
-            ("CANDIDATES WITH DATA", str(len(candidates)), "Public stocks + fund NAVs"),
-            ("PASSED GUARDRAILS", str(len(ranked)), f"Top {limit} eligible matches"),
-            ("SCREENED OUT", str(len(rejected)), "Volatility · liquidity · sector"),
-            ("STYLE", mode, f"{risk} risk preference"),
-        ])
-        for index, item in enumerate(ranked, start=1):
-            recommendation_card(item, index)
-        if not ranked:
-            note("No candidate passed this risk/guardrail configuration. "
-                 "Try a different risk band or inspect the reasons below.")
-        with st.expander("How scoring works / exclusions", expanded=False):
-            st.write("Ranking combines risk-volatility fit, sector/category relevance, "
-                     "and existing exposure. A proposed 10% position is screened against "
-                     "a 45% sector/category concentration cap.")
-            st.write("Stocks require an estimated 20-day median traded-value threshold. "
-                     "Mutual-fund redemption liquidity cannot be inferred from NAV data "
-                     "and must be checked separately.")
-            if rejected:
-                st.write("Guardrail exclusions:", *rejected)
-            for err in st.session_state.get("candidate_errors", []):
-                st.caption(f"Data unavailable: {err}")
-        st.caption("Scores are relevance heuristics, not return forecasts, buy ratings, "
-                   "or suitability assessments. Funds may have exit loads or lock-ins.")
-    else:
-        note("Click 'Discover matches' to fetch and filter live candidates. "
-             "The app does not display placeholder recommendation scores.")
-
-
-def display_performance(positions: list[dict]) -> None:
-    section(
-        "performance", "04", "TIME IN CONTEXT", "The story<br><em>behind the line.</em>",
-        "Observed price/NAV series, switchable horizons, chart zoom and hover-level detail.",
-    )
-    assets = positions + st.session_state.get("recommendation_assets", [])
-    unique_assets = {a["ticker"]: a for a in assets}
-    if not unique_assets:
-        note("Verified price histories will appear here after you analyse holdings.")
-        return
-    left, right = st.columns([1.4, 1], gap="large")
-    with left:
-        selected = st.selectbox(
-            "Instrument", options=list(unique_assets.keys()),
-            format_func=lambda k: unique_assets[k]["name"],
-        )
-    with right:
-        period = st.radio("Timeframe", ["1W", "1M", "6M", "1Y", "5Y"], index=3, horizontal=True)
-    asset = unique_assets[selected]
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Latest observed quote / NAV",
-              f"{'₹' if asset['currency'] == 'INR' else '$'}{float(asset['close'].iloc[-1]):,.2f}")
-    c2.metric("Source", asset["source"])
-    c3.metric("As of", asset["as_of"])
-    with st.container(border=True):
-        try:
-            st.plotly_chart(performance_chart(asset, period), use_container_width=True,
-                            key=f"price_{selected}_{period}")
-        except ValueError as exc:
-            st.info(str(exc))
-    summary = period_returns(asset["close"])
-    table = pd.DataFrame([{
-        "Period": name,
-        "Observed return": percent(value["absolute"], signed=True) if value else "Insufficient history",
-        "Annualised": percent(value["annualized"], signed=True) if value and value["annualized"] is not None else "—",
-    } for name, value in summary.items()])
-    st.dataframe(table, hide_index=True, use_container_width=True)
-    st.caption("Price-only returns exclude dividends, trading fees and taxes. "
-               "NAV history is historical; past performance does not predict future returns.")
-
-
 def display_fire(positions: list[dict]) -> None:
     section(
         "fire", "05", "FINANCIAL INDEPENDENCE", "Make the future<br><em>feel tangible.</em>",
         "Model net worth, the inflation-adjusted retirement target and the purchasing power of your savings.",
     )
     portfolio_value = sum(p["value_inr"] for p in positions)
+    networth_total = st.session_state.get("net_worth_total")
+    capital_choices = ["Enter manually"]
+    if positions:
+        capital_choices.insert(0, "Investment portfolio")
+    if networth_total is not None and networth_total >= 0:
+        capital_choices.insert(0, "Total net worth")
+    capital_choice = st.radio(
+        "Choose capital to project", capital_choices, horizontal=True,
+        help="Returns on illiquid property and non-investment assets should not be treated as guaranteed.",
+    )
     with st.container(border=True):
         left, right = st.columns(2, gap="large")
         with left:
@@ -375,22 +267,43 @@ def display_fire(positions: list[dict]) -> None:
             age = st.slider("Current age", min_value=18, max_value=80, value=29)
             retire_age = st.slider("Target retirement age", min_value=age + 1, max_value=100,
                                    value=min(100, max(55, age + 15)))
-            expenses = st.number_input("Current monthly expenses (₹)", min_value=0.0,
-                                       max_value=50_000_000.0, value=65_000.0, step=5_000.0)
+            expenses_text = st.text_input(
+                "Current monthly expenses (₹)", value="65,000",
+                help="Enter 65,000 or 6,50,000. Both Indian and western comma grouping work.",
+                key="fire_expenses_text",
+            )
             withdrawal = st.slider("Assumed annual withdrawal rate (%)", 2.0, 6.0, 4.0, .25)
         with right:
             st.markdown('<div class="wr-miniheading">CAPITAL & ASSUMPTIONS</div>', unsafe_allow_html=True)
-            use_portfolio = st.checkbox("Use analysed portfolio as starting net worth",
-                                        value=bool(portfolio_value > 0), disabled=not bool(portfolio_value))
-            initial_value = portfolio_value if use_portfolio else 2_500_000.0
-            wealth = st.number_input("Starting net worth (₹)", min_value=0.0,
-                                     max_value=5_000_000_000.0, value=float(initial_value),
-                                     step=100_000.0, disabled=use_portfolio)
-            sip = st.number_input("Monthly investment / SIP (₹)", min_value=0.0,
-                                  max_value=50_000_000.0, value=25_000.0, step=5_000.0)
+            if capital_choice == "Total net worth":
+                wealth = float(networth_total)
+                st.metric("Whole net worth (₹)", currency(wealth, compact=False))
+                st.caption("Includes user-entered asset estimates. Do not assume property or "
+                           "other non-investible assets earn the portfolio return.")
+            elif capital_choice == "Investment portfolio":
+                wealth = portfolio_value
+                st.metric("Investable holdings (₹)", currency(wealth, compact=False))
+            else:
+                wealth_text = st.text_input(
+                    "Starting net worth / investable corpus (₹)", value="25,00,000",
+                    help="Commas allowed: 25,00,000", key="fire_wealth_text",
+                )
+            sip_text = st.text_input(
+                "Monthly investment / SIP (₹)", value="25,000",
+                help="Commas allowed: 25,000", key="fire_sip_text",
+            )
             nominal = st.slider("Expected nominal annual return (%)", -10.0, 25.0, 10.0, .5)
             inflation = st.slider("Expected annual inflation (%)", 0.0, 15.0, 6.0, .5)
             step_up = st.slider("Annual SIP increase (%)", 0.0, 20.0, 0.0, 1.0)
+
+    try:
+        expenses = parse_inr(expenses_text)
+        if capital_choice == "Enter manually":
+            wealth = parse_inr(wealth_text)
+        sip = parse_inr(sip_text)
+    except ValueError as exc:
+        st.error(f"Invalid rupee amount: {exc}")
+        return
 
     assumptions = FireInputs(
         current_age=age, monthly_expenses=expenses, net_worth=wealth,
@@ -497,13 +410,46 @@ def display_lab() -> None:
 
 def main() -> None:
     inject_css()
-    hero()
-    positions, risk, preferred_sectors = display_portfolio()
-    display_analytics(positions)
-    display_recommendations(positions, risk, preferred_sectors)
-    display_performance(positions)
-    display_fire(positions)
-    display_lab()
+    inject_navigation_css()
+    top_navigation()
+    page = current_page()
+    positions = st.session_state.get("positions", [])
+    if page == "home":
+        universe()
+    else:
+        headers = {
+            "portfolio": ("01", "Know your <em>net worth.</em>",
+                          "Import holdings, review live valuations, allocations and total portfolio risk."),
+            "analytics": ("02", "Stocks, <em>decoded.</em>",
+                          "Returns, alpha, beta, volatility, Sharpe and drawdown for every holding."),
+            "discover": ("03", "Discover your <em>next move.</em>",
+                         "Ten ranked stock ideas, explainable guardrails and a metrics deep-dive."),
+            "fire": ("04", "Design your <em>freedom.</em>",
+                     "Projection charts, inflation-adjusted corpus and what-if modelling."),
+            "lab": ("05", "Test the <em>model.</em>",
+                    "Synthetic offline ranking evaluation, ablation and simulated experiments."),
+        }
+        number, title, subtitle = headers[page]
+        page_header(number, title, subtitle)
+        home_return()
+        if page == "portfolio":
+            positions, risk, preferred_sectors = display_portfolio()
+            st.session_state["saved_risk"] = risk
+            st.session_state["saved_sectors"] = preferred_sectors
+            net_worth_breakdown(positions)
+            display_analytics(positions)
+        elif page == "analytics":
+            stock_analytics(positions, cached_benchmark)
+        elif page == "discover":
+            ranked_discovery(
+                positions, st.session_state.get("saved_risk", "Moderate"),
+                st.session_state.get("saved_sectors", []),
+                cached_candidate_batch, cached_benchmark,
+            )
+        elif page == "fire":
+            display_fire(positions)
+        elif page == "lab":
+            display_lab()
     footer()
 
 

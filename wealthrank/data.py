@@ -8,6 +8,8 @@ import pandas as pd
 import requests
 import yfinance as yf
 
+from wealthrank.money import parse_inr
+
 
 MF_API = "https://api.mfapi.in"
 REQUEST_TIMEOUT = 14
@@ -22,6 +24,26 @@ STOCK_SECTORS = {
     "NVDA": "Technology", "AMZN": "Consumer",
     "JNJ": "Healthcare", "JPM": "Financials",
     "XOM": "Energy", "PG": "Consumer",
+    "WIPRO.NS": "Technology", "HCLTECH.NS": "Technology", "TECHM.NS": "Technology",
+    "PERSISTENT.NS": "Technology", "COFORGE.NS": "Technology",
+    "AXISBANK.NS": "Financials", "KOTAKBANK.NS": "Financials", "BAJFINANCE.NS": "Financials",
+    "BAJAJFINSV.NS": "Financials", "INDUSINDBK.NS": "Financials",
+    "TITAN.NS": "Consumer", "NESTLEIND.NS": "Consumer", "ASIANPAINT.NS": "Consumer",
+    "DABUR.NS": "Consumer", "BRITANNIA.NS": "Consumer",
+    "DRREDDY.NS": "Healthcare", "CIPLA.NS": "Healthcare", "APOLLOHOSP.NS": "Healthcare",
+    "TATAMOTORS.NS": "Automotive", "M&M.NS": "Automotive", "EICHERMOT.NS": "Automotive",
+    "ULTRACEMCO.NS": "Materials", "JSWSTEEL.NS": "Materials", "TATASTEEL.NS": "Materials",
+    "NTPC.NS": "Utilities", "POWERGRID.NS": "Utilities", "ONGC.NS": "Energy",
+    "COALINDIA.NS": "Energy", "ADANIPORTS.NS": "Industrials", "BEL.NS": "Industrials",
+    "SIEMENS.NS": "Industrials",
+    "GOOGL": "Technology", "META": "Technology", "ORCL": "Technology",
+    "CRM": "Technology", "ADBE": "Technology", "AVGO": "Technology",
+    "INTC": "Technology", "AMD": "Technology", "CSCO": "Technology",
+    "BAC": "Financials", "V": "Financials", "MA": "Financials",
+    "UNH": "Healthcare", "ABBV": "Healthcare", "PFE": "Healthcare",
+    "WMT": "Consumer", "COST": "Consumer", "HD": "Consumer",
+    "KO": "Consumer", "PEP": "Consumer", "DIS": "Communication",
+    "CVX": "Energy", "CAT": "Industrials", "GE": "Industrials",
 }
 
 
@@ -176,14 +198,13 @@ def normalize_holdings(frame: pd.DataFrame) -> list[dict]:
         kind = str(row["Type"]).strip().lower()
         asset_type = "Mutual fund" if kind in {"mf", "mutual fund", "fund"} else "Stock"
         quantity = pd.to_numeric(row["Quantity"], errors="coerce")
-        basis = pd.to_numeric(row["Avg Buy Price"], errors="coerce")
+        raw_basis = str(row["Avg Buy Price"]).strip()
+        basis = 0.0 if raw_basis.lower() in {"", "nan", "none"} else parse_inr(raw_basis)
         if pd.isna(quantity) or quantity <= 0:
             raise ValueError(f"Quantity for {code} must be greater than zero.")
-        if not pd.isna(basis) and basis < 0:
-            raise ValueError(f"Average buy price for {code} cannot be negative.")
         rows.append({"Type": asset_type, "Ticker": code,
                      "Quantity": float(quantity),
-                     "Avg Buy Price": 0.0 if pd.isna(basis) else float(basis)})
+                     "Avg Buy Price": float(basis)})
     if len(rows) > 12:
         raise ValueError("Use at most 12 holdings per analysis to respect free-data providers.")
     # Combine exact duplicate identifiers; unit-price remains a weighted average.
@@ -229,3 +250,50 @@ def resolve_portfolio(holdings: list[dict], stock_loader, fund_loader, fx_loader
         except Exception as exc:
             errors.append(f"{symbol}: {exc}")
     return positions, errors
+
+
+def fetch_stock_batch(symbols: list[str]) -> tuple[list[dict], list[str]]:
+    """Batch candidate snapshots in one Yahoo Finance request.
+
+    Missing symbols are skipped with explicit errors; market prices are never
+    fabricated. This is a curated INR/US universe, not arbitrary FX guessing.
+    """
+    unique = list(dict.fromkeys(symbol.strip().upper() for symbol in symbols))
+    if not unique:
+        return [], []
+    if len(unique) > 55 or any(not re.fullmatch(r"[A-Z0-9.\-]{1,24}", s) for s in unique):
+        raise ValueError("Invalid candidate universe.")
+    try:
+        frame = yf.download(
+            tickers=unique, period="5y", interval="1d", auto_adjust=True,
+            group_by="ticker", threads=True, progress=False,
+        )
+    except Exception as exc:
+        return [], [f"Batch quote download failed: {exc}"]
+    if frame is None or frame.empty:
+        return [], ["Market data provider returned no candidate quotes."]
+    out, errors = [], []
+    for symbol in unique:
+        try:
+            if isinstance(frame.columns, pd.MultiIndex):
+                block = frame[symbol] if symbol in frame.columns.get_level_values(0) else frame.xs(symbol, axis=1, level=1)
+            else:
+                block = frame
+            if "Close" not in block or "Volume" not in block:
+                raise ValueError("Missing close/volume from provider")
+            close = _series(block["Close"])
+            vol = _series(block["Volume"])
+            if len(close) < 61 or close.iloc[-1] <= 0:
+                raise ValueError("Insufficient observed close history")
+            if pd.Timestamp.now().normalize() - close.index[-1] > pd.Timedelta(days=12):
+                raise ValueError("Last close more than 12 days old")
+            out.append({
+                "ticker": symbol, "name": symbol, "asset_class": "Stock",
+                "sector": STOCK_SECTORS.get(symbol, "Unclassified"),
+                "currency": "INR" if symbol.endswith((".NS", ".BO")) else "USD",
+                "close": close, "volume": vol, "source": "Yahoo Finance",
+                "as_of": close.index[-1].date().isoformat(),
+            })
+        except Exception as exc:
+            errors.append(f"{symbol}: {exc}")
+    return out, errors

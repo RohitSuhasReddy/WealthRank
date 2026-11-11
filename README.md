@@ -1,14 +1,14 @@
 # WealthRank
 
-Interactive stock and Indian mutual-fund portfolio analytics, explainable recommendations, performance charts, and an inflation-aware FIRE calculator.
+An interactive personal-finance application with an animated **solar-system navigation**. The five standalone screens are **Portfolio**, **Stock Analytics**, **Discover**, **FIRE Planner**, and **Model Lab**.
 
-Built with **Python, Streamlit, Plotly, yfinance and MFapi.in**. No API keys needed.
+Built with Python, Streamlit, Plotly, yfinance and MFapi.in. No paid API keys.
 
-## Run locally
+## Run
 
-Use Python 3.10+.
+Python 3.10+.
 
-### Windows (PowerShell)
+**Windows PowerShell**
 
 ```powershell
 git clone https://github.com/RohitSuhasReddy/WealthRank.git
@@ -19,7 +19,7 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### macOS / Linux
+**macOS / Linux**
 
 ```bash
 git clone https://github.com/RohitSuhasReddy/WealthRank.git
@@ -30,9 +30,9 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open **http://localhost:8501**.
+Open **http://localhost:8501**. Click a planet to open a screen. Import the sample holdings or upload a CSV/XLSX with `Ticker`, `Quantity`, optional `Avg Buy Price` and `Type` (Stock / Mutual fund). Yahoo Finance tickers and AMFI scheme codes are supported. Click **Analyse my portfolio** to fetch quotes, then **Discover** to rank up to ten eligible stocks.
 
-Use the editable example holdings or upload a CSV / XLSX with `Ticker`, `Quantity`, optional `Avg Buy Price`, and optional `Type` (`Stock` or `Mutual fund`). Use Yahoo Finance tickers for stocks and AMFI scheme codes for mutual funds. Click **Analyse my portfolio**, then **Discover matches**.
+Net-worth and FIRE monetary text fields accept Indian commas, e.g. `25,00,000`.
 
 ## Tests
 
@@ -41,4 +41,4 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Prices / NAVs are fetched on demand and may be delayed or unavailable. FIRE projections are hypothetical. Recommendations are rule-based educational matches, not investment advice. The model lab uses **synthetic** profiles and clicks, not real A/B-test results.
+Market data may be unavailable or delayed. Rankings are transparent heuristic matches, **not** investment advice. Alpha/beta and other historical metrics are descriptive, not predictive. FIRE is a modelled scenario; Model Lab experiments use **synthetic** data.
