@@ -57,7 +57,7 @@ def _series(values: pd.Series) -> pd.Series:
 
 def fetch_stock(ticker: str) -> dict:
     symbol = ticker.strip().upper()
-    if not re.fullmatch(r"[A-Z0-9^.=\-]{1,24}", symbol):
+    if not re.fullmatch(r"[A-Z0-9^.=&\-]{1,24}", symbol):
         raise ValueError(f"Invalid equity ticker: {ticker!r}")
     asset = yf.Ticker(symbol)
     frame = asset.history(period="5y", interval="1d", auto_adjust=True)
@@ -258,22 +258,32 @@ def fetch_stock_batch(symbols: list[str]) -> tuple[list[dict], list[str]]:
     Missing symbols are skipped with explicit errors; market prices are never
     fabricated. This is a curated INR/US universe, not arbitrary FX guessing.
     """
-    unique = list(dict.fromkeys(symbol.strip().upper() for symbol in symbols))
+    unique = list(dict.fromkeys(str(symbol).strip().upper() for symbol in symbols))
     if not unique:
         return [], []
-    if len(unique) > 55 or any(not re.fullmatch(r"[A-Z0-9.\-]{1,24}", s) for s in unique):
-        raise ValueError("Invalid candidate universe.")
+    # An ampersand is valid in Yahoo Finance symbols such as M&M.NS.
+    # Reject individual malformed candidates rather than crashing the
+    # entire recommendation page because of one bad symbol.
+    pattern = re.compile(r"[A-Z0-9.&\-]{1,24}")
+    valid = [symbol for symbol in unique if pattern.fullmatch(symbol)]
+    errors = [f"{symbol!r}: skipped invalid stock ticker" for symbol in unique
+              if not pattern.fullmatch(symbol)]
+    if not valid:
+        return [], errors or ["No valid candidate tickers."]
+    if len(valid) > 55:
+        errors.append(f"Candidate universe capped at 55 symbols; {len(valid) - 55} not requested.")
+        valid = valid[:55]
     try:
         frame = yf.download(
-            tickers=unique, period="5y", interval="1d", auto_adjust=True,
+            tickers=valid, period="5y", interval="1d", auto_adjust=True,
             group_by="ticker", threads=True, progress=False,
         )
     except Exception as exc:
-        return [], [f"Batch quote download failed: {exc}"]
+        return [], errors + [f"Batch quote download failed: {exc}"]
     if frame is None or frame.empty:
-        return [], ["Market data provider returned no candidate quotes."]
-    out, errors = [], []
-    for symbol in unique:
+        return [], errors + ["Market data provider returned no candidate quotes."]
+    out = []
+    for symbol in valid:
         try:
             if isinstance(frame.columns, pd.MultiIndex):
                 block = frame[symbol] if symbol in frame.columns.get_level_values(0) else frame.xs(symbol, axis=1, level=1)

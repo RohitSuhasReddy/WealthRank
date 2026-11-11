@@ -86,3 +86,64 @@ def test_ranker_returns_ten_when_ten_pass_screens():
     ranked, excluded = rank_candidates(holdings, universe, "Moderate", mode="Similar", limit=10)
     assert len(ranked) == 10
     assert ranked[0]["score"] >= ranked[-1]["score"]
+
+
+
+def test_india_universe_contains_accepted_ampersand_symbol(monkeypatch):
+    """Regression: M&M.NS previously crashed *all* recommendations."""
+    from wealthrank.data import fetch_stock_batch
+    from wealthrank.recommendations import candidate_universe
+    import re
+    candidates = candidate_universe("INR")
+    assert "M&M.NS" in candidates
+    assert all(re.fullmatch(r"[A-Z0-9.&\-]{1,24}", symbol) for symbol in candidates)
+    dates = pd.bdate_range(end=pd.Timestamp.now().normalize(), periods=130)
+    frame = pd.DataFrame(
+        {
+            ("M&M.NS", "Close"): np.linspace(100, 150, len(dates)),
+            ("M&M.NS", "Volume"): np.full(len(dates), 1_000_000),
+            ("INFY.NS", "Close"): np.linspace(200, 275, len(dates)),
+            ("INFY.NS", "Volume"): np.full(len(dates), 2_000_000),
+        }, index=dates,
+    )
+    calls = []
+    def fake_download(**kwargs):
+        calls.append(kwargs["tickers"])
+        return frame
+    monkeypatch.setattr("wealthrank.data.yf.download", fake_download)
+    assets, errors = fetch_stock_batch(["M&M.NS", "INFY.NS"])
+    assert not errors
+    assert [asset["ticker"] for asset in assets] == ["M&M.NS", "INFY.NS"]
+    assert calls == [["M&M.NS", "INFY.NS"]]
+
+
+def test_bad_candidates_are_skipped_without_crashing(monkeypatch):
+    from wealthrank.data import fetch_stock_batch
+    dates = pd.bdate_range(end=pd.Timestamp.now().normalize(), periods=120)
+    frame = pd.DataFrame({
+        ("INFY.NS", "Close"): np.linspace(90, 110, len(dates)),
+        ("INFY.NS", "Volume"): np.full(len(dates), 1_000_000),
+    }, index=dates)
+    monkeypatch.setattr(
+        "wealthrank.data.yf.download",
+        lambda **kwargs: frame if kwargs["tickers"] == ["INFY.NS"] else None,
+    )
+    assets, errors = fetch_stock_batch(["NOT VALID!", "INFY.NS"])
+    assert [asset["ticker"] for asset in assets] == ["INFY.NS"]
+    assert len(errors) == 1
+    assert "NOT VALID!" in errors[0]
+
+
+def test_single_stock_accepts_ampersand_ticker(monkeypatch):
+    from wealthrank.data import fetch_stock
+    dates = pd.bdate_range(end=pd.Timestamp.now().normalize(), periods=120, tz="UTC")
+    frame = pd.DataFrame({"Close": np.linspace(100, 150, len(dates)),
+                          "Volume": np.full(len(dates), 500000)}, index=dates)
+    class FakeTicker:
+        fast_info = {"currency": "INR"}
+        def history(self, **kwargs):
+            return frame
+    monkeypatch.setattr("wealthrank.data.yf.Ticker", lambda name: FakeTicker())
+    asset = fetch_stock("M&M.NS")
+    assert asset["ticker"] == "M&M.NS"
+    assert asset["currency"] == "INR"
