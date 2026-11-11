@@ -3,9 +3,9 @@ import re
 from decimal import Decimal, InvalidOperation
 
 
-_INDIA = re.compile(r"^\d{1,3}(?:,\d{2})*,\d{3}(?:\.\d{1,2})?$")
-_WEST = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?$")
-_PLAIN = re.compile(r"^\d+(?:\.\d{1,2})?$")
+_INDIA = re.compile(r"^\d{1,3}(?:,\d{2})*,\d{3}(?:\.\d{1,4})?$")
+_WEST = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d{1,4})?$")
+_PLAIN = re.compile(r"^\d+(?:\.\d{1,4})?$")
 
 
 def parse_inr(value: str) -> float:
@@ -28,7 +28,8 @@ def format_inr(amount: float, decimals: bool = False) -> str:
     if not number.is_finite():
         raise ValueError("Cannot format a non-finite money amount.")
     sign = "-" if number < 0 else ""
-    text = f"{abs(number):.2f}" if decimals else f"{abs(number):.0f}"
+    precision = 4 if decimals and number != number.quantize(Decimal("0.01")) else 2
+    text = f"{abs(number):.{precision}f}" if decimals else f"{abs(number):.0f}"
     integer, _, fraction = text.partition(".")
     if len(integer) > 3:
         tail, head = integer[-3:], integer[:-3]

@@ -15,7 +15,7 @@ def net_worth_breakdown(positions: list[dict]) -> None:
     st.caption("Investment prices come from public feeds. Bank balances, savings, property "
                "and debt are user-entered estimates; no personal bank account is connected.")
     fields = [
-        ("cash", "Cash and bank balances", "1,00,000"),
+        ("cash", "Cash and bank balances", "0"),
         ("deposits", "Deposits and other savings", "0"),
         ("other_assets", "Other assets / property", "0"),
         ("liabilities", "Loans and liabilities", "0"),
