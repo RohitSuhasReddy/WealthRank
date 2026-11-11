@@ -4,6 +4,8 @@ Run with a local Streamlit server started on http://127.0.0.1:8501.
 Saves desktop/mobile screenshots as CI artifacts for visual inspection.
 """
 from pathlib import Path
+import time
+import urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -69,7 +71,19 @@ def verify(page, label: str) -> None:
     print(f"{label}: planets aligned; heading separated; screenshot captured.")
 
 
+def wait_for_streamlit() -> None:
+    for _ in range(90):
+        try:
+            with urllib.request.urlopen(URL + "/_stcore/health", timeout=2) as response:
+                if response.status == 200:
+                    return
+        except Exception:
+            time.sleep(.5)
+    raise RuntimeError("The local Streamlit server did not become ready.")
+
+
 def main() -> None:
+    wait_for_streamlit()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
         try:
