@@ -35,33 +35,34 @@ def current_page() -> str:
 
 def inject_navigation_css() -> None:
     st.markdown("""<style>
+.wr-homebrand{display:flex;align-items:center;gap:11px;border-bottom:1px solid rgba(254,255,250,.12);padding:8px 2px 15px;color:#FEFFFA;font-size:19px;font-weight:800;letter-spacing:-.06em}.wr-homebrand b{color:#D23A00}.wr-homebrand small{font-size:9px;font-weight:600;letter-spacing:.14em;color:#9C8E85;margin-left:auto}
 .wr-sitebar{display:flex;align-items:center;gap:10px;padding:6px 0}
 .wr-sitebrand{font-size:24px;font-weight:800;letter-spacing:-.07em;color:#FEFFFA;white-space:nowrap}
 .wr-sitebrand b{color:#D23A00}.wr-sitebrand small{font-size:9px;letter-spacing:.16em;color:#8E817C;display:block;font-weight:600}
 .st-key-app_nav{padding:10px 0 19px;border-bottom:1px solid #35231e;margin-bottom:12px}
 .st-key-app_nav button{min-height:41px!important;font-size:11px!important;font-weight:700!important;padding:6px 8px!important}
-.wr-space-head{position:relative;z-index:3;max-width:880px;text-align:center;margin:38px auto 32px}
+.wr-space-head{position:relative;z-index:3;max-width:880px;text-align:center;margin:22px auto 11px}
 .wr-space-overline{font-size:10px;letter-spacing:.23em;font-weight:800;color:#EF794D;text-transform:uppercase;animation:wr-arrive .8s ease both}
 .wr-space-title{font-size:clamp(50px,6vw,81px)!important;line-height:1.05!important;font-weight:500;letter-spacing:-.07em;margin:12px auto 18px!important;color:#FEFFFA;animation:wr-arrive 1s ease both}
 .wr-space-title em{font-family:'Playfair Display',Georgia,serif;font-weight:400;color:#E96834}
 .wr-space-sub{color:#BBAEA8;font-size:14px;line-height:1.7;max-width:600px;margin:0 auto;animation:wr-arrive 1.2s ease both}
 /* The previous absolute-positioned Streamlit widgets caused the screenshot's broken layout.
    Three real rows and columns now determine every planet position. */
-.st-key-universe{position:relative!important;isolation:isolate;max-width:1050px;margin:25px auto 0!important;padding:20px 28px 26px!important;overflow:hidden!important;background:radial-gradient(ellipse at 50% 50%,rgba(210,58,0,.16),transparent 66%)}
+.st-key-universe{position:relative!important;isolation:isolate;max-width:1050px;margin:7px auto 0!important;padding:7px 28px 10px!important;overflow:hidden!important;background:radial-gradient(ellipse at 50% 50%,rgba(210,58,0,.16),transparent 66%)}
 .st-key-universe::before,.st-key-universe::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-19deg);border:1px solid rgba(254,255,250,.18);border-radius:50%;pointer-events:none;z-index:0}
-.st-key-universe::before{width:92%;height:350px}
-.st-key-universe::after{width:71%;height:295px;border-color:rgba(210,58,0,.36);transform:translate(-50%,-50%) rotate(22deg)}
+.st-key-universe::before{width:92%;height:300px}
+.st-key-universe::after{width:71%;height:235px;border-color:rgba(210,58,0,.36);transform:translate(-50%,-50%) rotate(22deg)}
 .wr-starfield{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.56;background-image:radial-gradient(circle at 9% 19%,#FEFFFA 1px,transparent 2px),radial-gradient(circle at 88% 14%,#FEFFFA 1px,transparent 2px),radial-gradient(circle at 22% 76%,#D23A00 1px,transparent 2px),radial-gradient(circle at 80% 87%,#FEFFFA 1px,transparent 2px)}
 .st-key-solar_row_top,.st-key-solar_row_middle,.st-key-solar_row_bottom{position:relative!important;z-index:2}
-.st-key-solar_row_top{min-height:146px}.st-key-solar_row_middle{min-height:242px}.st-key-solar_row_bottom{min-height:145px}
+.st-key-solar_row_top{min-height:106px}.st-key-solar_row_middle{min-height:185px}.st-key-solar_row_bottom{min-height:108px}
 .st-key-universe [data-testid="stHorizontalBlock"]{align-items:center!important}
-.wr-sun-shell{height:240px;display:flex;align-items:center;justify-content:center;pointer-events:none;position:relative}
-.wr-sun{width:202px;height:202px;position:relative;flex:none;border-radius:50%;background:radial-gradient(circle at 27% 22%,#FFD3A7,#F56C20 16%,#B7350D 42%,#2E1007 78%,#070303);box-shadow:0 0 28px rgba(255,91,23,.64),0 0 100px rgba(210,58,0,.23),inset -22px -32px 50px #170703;animation:wr-breathe 8s ease-in-out infinite}
+.wr-sun-shell{height:182px;display:flex;align-items:center;justify-content:center;pointer-events:none;position:relative}
+.wr-sun{width:160px;height:160px;position:relative;flex:none;border-radius:50%;background:radial-gradient(circle at 27% 22%,#FFD3A7,#F56C20 16%,#B7350D 42%,#2E1007 78%,#070303);box-shadow:0 0 28px rgba(255,91,23,.64),0 0 100px rgba(210,58,0,.23),inset -22px -32px 50px #170703;animation:wr-breathe 8s ease-in-out infinite}
 .wr-sun::before{content:"";position:absolute;inset:24% -22%;transform:rotate(-27deg);border-radius:50%;border:7px solid #FF7526;box-shadow:0 0 20px #F96516,0 0 52px #9F2708;animation:wr-ring 12s ease-in-out infinite}
 .wr-sun-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;font-size:13px;letter-spacing:.13em;font-weight:800;color:#FEFFFA;text-shadow:0 2px 9px #190704}
 .wr-sun-inner span{font-size:8px;letter-spacing:.1em;color:#F4CBAC;margin-top:9px}
 .st-key-universe [class*="st-key-planet_"]{width:100%!important;display:flex!important;align-items:center!important;justify-content:center!important;z-index:5;position:relative!important;overflow:visible!important}
-.st-key-universe [class*="st-key-planet_"] button{height:134px!important;width:134px!important;min-height:134px!important;min-width:134px!important;padding:12px!important;margin:auto!important;border-radius:50%!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;white-space:normal!important;line-height:1.4!important;font-size:12px!important;font-weight:800!important;color:#FEFFFA!important;border:1px solid rgba(254,255,250,.42)!important;background:radial-gradient(circle at 25% 20%,#754331,#2B1B15 38%,#080505 88%)!important;box-shadow:inset -17px -18px 36px #080506,0 0 24px rgba(210,58,0,.20)!important;animation:wr-float 7s ease-in-out infinite!important;transition:transform .3s,border-color .3s,box-shadow .3s!important}
+.st-key-universe [class*="st-key-planet_"] button{height:114px!important;width:114px!important;min-height:114px!important;min-width:114px!important;padding:12px!important;margin:auto!important;border-radius:50%!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;white-space:normal!important;line-height:1.4!important;font-size:12px!important;font-weight:800!important;color:#FEFFFA!important;border:1px solid rgba(254,255,250,.42)!important;background:radial-gradient(circle at 25% 20%,#754331,#2B1B15 38%,#080505 88%)!important;box-shadow:inset -17px -18px 36px #080506,0 0 24px rgba(210,58,0,.20)!important;animation:wr-float 7s ease-in-out infinite!important;transition:transform .3s,border-color .3s,box-shadow .3s!important}
 .st-key-universe .st-key-planet_analytics button{animation-delay:-1.5s!important}
 .st-key-universe .st-key-planet_lab button{animation-delay:-3.2s!important}
 .st-key-universe .st-key-planet_discover button{animation-delay:-4s!important}
@@ -85,9 +86,9 @@ def inject_navigation_css() -> None:
 @keyframes wr-liquid{0%{transform:translate(-2%,1%) scale(1)}50%{transform:translate(4%,-5%) scale(1.12)}100%{transform:translate(-1%,5%) scale(1.07)}}
 @media(max-width:850px){
  .st-key-universe{padding:12px 8px!important}
- .st-key-universe [class*="st-key-planet_"] button{height:112px!important;width:112px!important;min-height:112px!important;min-width:112px!important;font-size:10px!important}
- .wr-sun{height:165px;width:165px}.wr-sun-shell{height:194px}
- .st-key-solar_row_top{min-height:120px}.st-key-solar_row_middle{min-height:200px}.st-key-solar_row_bottom{min-height:120px}
+ .st-key-universe [class*="st-key-planet_"] button{height:105px!important;width:105px!important;min-height:105px!important;min-width:105px!important;font-size:10px!important}
+ .wr-sun{height:145px;width:145px}.wr-sun-shell{height:175px}
+ .st-key-solar_row_top{min-height:103px}.st-key-solar_row_middle{min-height:177px}.st-key-solar_row_bottom{min-height:104px}
 }
 @media(max-width:610px){
  .wr-space-head{margin:20px auto 15px}.wr-space-title{font-size:clamp(41px,9vw,65px)!important}.wr-space-sub{font-size:12px}
@@ -97,13 +98,21 @@ def inject_navigation_css() -> None:
  .st-key-universe [data-testid="stHorizontalBlock"]{flex-direction:row!important;flex-wrap:nowrap!important;gap:3px!important}
  .st-key-universe [data-testid="stColumn"]{min-width:0!important;flex:1 1 0!important;width:33.33%!important}
  .st-key-universe [class*="st-key-planet_"] button{height:86px!important;width:86px!important;min-height:86px!important;min-width:86px!important;padding:5px!important;font-size:9px!important}
- .wr-sun{height:112px;width:112px}.wr-sun::before{border-width:5px}
- .wr-sun-inner{font-size:9px}.wr-sun-inner span{font-size:6px}.wr-sun-shell{height:140px}
- .st-key-solar_row_top{min-height:95px}.st-key-solar_row_middle{min-height:148px}.st-key-solar_row_bottom{min-height:95px}
+ .wr-sun{height:88px;width:88px}.wr-sun::before{border-width:4px}
+ .wr-sun-inner{font-size:7px;letter-spacing:.04em}.wr-sun-inner span{font-size:5px}.wr-sun-shell{height:116px}
+ .st-key-solar_row_top{min-height:94px}.st-key-solar_row_middle{min-height:120px}.st-key-solar_row_bottom{min-height:98px}
  .st-key-universe::before{height:235px}.st-key-universe::after{height:165px}
 }
 @media(prefers-reduced-motion:reduce){.st-key-universe button,.wr-sun,.wr-sun::before,[data-testid="stAppViewContainer"]::before{animation:none!important}}
 </style>""", unsafe_allow_html=True)
+
+
+def home_brand() -> None:
+    st.markdown(
+        '<div class="wr-homebrand"><span class="wr-mark"></span>'
+        'WealthRank<b>.</b><small>INTERACTIVE FINANCIAL UNIVERSE</small></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def top_navigation() -> None:
