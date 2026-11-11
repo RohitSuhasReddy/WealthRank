@@ -179,6 +179,7 @@ def normalize_holdings(frame: pd.DataFrame) -> list[dict]:
         "quantity": "Quantity", "units": "Quantity",
         "avg buy price": "Avg Buy Price", "average buy price": "Avg Buy Price",
         "type": "Type", "asset type": "Type",
+        "purchase date": "Purchase Date", "buy date": "Purchase Date",
     }
     normalized = frame.rename(columns={
         c: aliases.get(str(c).strip().casefold(), str(c)) for c in frame.columns
@@ -190,6 +191,8 @@ def normalize_holdings(frame: pd.DataFrame) -> list[dict]:
         normalized["Type"] = "Stock"
     if "Avg Buy Price" not in normalized:
         normalized["Avg Buy Price"] = 0.0
+    if "Purchase Date" not in normalized:
+        normalized["Purchase Date"] = ""
     rows = []
     for _, row in normalized.iterrows():
         code = str(row["Ticker"]).strip()
@@ -202,11 +205,22 @@ def normalize_holdings(frame: pd.DataFrame) -> list[dict]:
         basis = 0.0 if raw_basis.lower() in {"", "nan", "none"} else parse_inr(raw_basis)
         if pd.isna(quantity) or quantity <= 0:
             raise ValueError(f"Quantity for {code} must be greater than zero.")
+        raw_date = row["Purchase Date"]
+        if pd.isna(raw_date) or str(raw_date).strip().lower() in {"", "nan", "none"}:
+            purchase_date = ""
+        else:
+            parsed = pd.to_datetime(raw_date, errors="coerce")
+            if pd.isna(parsed):
+                raise ValueError(f"Invalid purchase date for {code}. Use YYYY-MM-DD.")
+            purchase_date = parsed.date().isoformat()
+            if parsed.date() > pd.Timestamp.now().date():
+                raise ValueError(f"Purchase date for {code} cannot be in the future.")
         rows.append({"Type": asset_type, "Ticker": code,
                      "Quantity": float(quantity),
-                     "Avg Buy Price": float(basis)})
-    if len(rows) > 12:
-        raise ValueError("Use at most 12 holdings per analysis to respect free-data providers.")
+                     "Avg Buy Price": float(basis),
+                     "Purchase Date": purchase_date})
+    if len(rows) > 50:
+        raise ValueError("Use at most 50 holdings per analysis to respect free-data providers.")
     # Combine exact duplicate identifiers; unit-price remains a weighted average.
     combined = {}
     for row in rows:
@@ -221,6 +235,8 @@ def normalize_holdings(frame: pd.DataFrame) -> list[dict]:
                 row["Avg Buy Price"] * row["Quantity"]
             ) / new_quantity
             item["Quantity"] = new_quantity
+            dates = [d for d in (item["Purchase Date"], row["Purchase Date"]) if d]
+            item["Purchase Date"] = min(dates) if dates else ""
     return list(combined.values())
 
 
@@ -242,6 +258,7 @@ def resolve_portfolio(holdings: list[dict], stock_loader, fund_loader, fx_loader
             record = dict(asset)
             record.update({
                 "quantity": quantity, "avg_buy_price": item.get("Avg Buy Price", 0),
+                "purchase_date": item.get("Purchase Date", ""),
                 "history_inr": history_inr,
                 "latest_inr": latest,
                 "value_inr": quantity * latest,

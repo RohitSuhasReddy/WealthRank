@@ -11,7 +11,8 @@ import streamlit as st
 from wealthrank.analytics import period_returns
 from wealthrank.charts import performance_chart
 from wealthrank.navigation import navigate
-from wealthrank.recommendations import candidate_universe, rank_candidates
+from wealthrank.catalog import sectors_for_market, tickers_for_sector
+from wealthrank.category_ranking import rank_sector_stocks
 from wealthrank.stock_metrics import instrument_metrics
 from wealthrank.theme import metrics, note, recommendation_card
 
@@ -113,9 +114,17 @@ def stock_analytics(positions: list[dict], benchmark_loader) -> None:
     with st.container(border=True):
         st.markdown('<div class="wr-panel-head">Observed price / NAV performance</div>',
                     unsafe_allow_html=True)
+        view = st.radio(
+            "Vertical scale", ["Zoomed price", "Percentage change"],
+            horizontal=True, key="holding_chart_scale",
+            help="Zoomed price uses the observed low/high; percentage change rebases the first price to 0%.",
+        )
         try:
-            st.plotly_chart(performance_chart(asset, period), use_container_width=True,
-                            key=f"holding_chart_{selected}_{period}")
+            st.plotly_chart(
+                performance_chart(asset, period, view=view),
+                use_container_width=True,
+                key=f"holding_chart_{selected}_{period}_{view}",
+            )
         except ValueError as exc:
             st.info(str(exc))
     returns = period_returns(asset["close"])
@@ -141,126 +150,146 @@ def ranked_discovery(
     candidate_loader,
     benchmark_loader,
 ) -> None:
-    """Top 10 guarded stock ideas, metrics table and selected stock deep-dive."""
-    if not positions:
-        note("Portfolio context is required for personalised ranking. Add at least one verified holding first.")
-        st.button("Set up Portfolio →", on_click=navigate, args=("portfolio",),
-                  type="primary", key="discover_to_portfolio")
-        return
+    """Sector-specific top-ten ranking, independent of having a portfolio."""
+    india_value = sum(p["value_inr"] for p in positions if p.get("currency") == "INR")
+    total_value = sum(p["value_inr"] for p in positions)
+    default_market = 0 if not total_value or india_value >= total_value / 2 else 1
 
-    india_value = sum(p["value_inr"] for p in positions if p["currency"] == "INR")
-    overall = sum(p["value_inr"] for p in positions)
-    initial = 0 if india_value >= overall / 2 else 1
-    first, second, third = st.columns([1, 1.2, 1], gap="large")
-    with first:
-        market = st.selectbox("Recommendation market", ["India", "US"], index=initial)
-    with second:
-        mode = st.radio("Ranking strategy", ["Similar", "Diversifying"], horizontal=True)
-    with third:
-        st.markdown('<div class="wr-miniheading">CURRENT PROFILE</div>', unsafe_allow_html=True)
-        st.caption(f"{risk} risk · up to 10 eligible stock matches")
+    market_col, sector_col, label_col = st.columns([.9, 1.4, 1], gap="large")
+    with market_col:
+        market = st.selectbox("Stock market", ["India", "US"], index=default_market,
+                              key="sector_market")
+    with sector_col:
+        sector = st.selectbox("Stock category / sector", sectors_for_market(market),
+                              key="sector_category")
+    with label_col:
+        st.markdown('<div class="wr-miniheading">CATEGORY LEADERBOARD</div>',
+                    unsafe_allow_html=True)
+        st.caption(f"Top 10 observed stocks · {risk} risk preference")
 
-    if st.button("Rank 10 stock ideas ↗", type="primary", use_container_width=True,
-                 key="load_discovery"):
-        universe = candidate_universe("INR" if market == "India" else "USD")
-        held = {a["ticker"].upper() for a in positions}
-        symbols = tuple(symbol for symbol in universe if symbol not in held)
-        with st.status("Fetching stock histories and applying risk guardrails…", expanded=True) as status:
-            assets, errors = candidate_loader(symbols)
-            st.session_state["ranked_candidate_assets"] = assets
-            st.session_state["ranked_candidate_errors"] = errors
-            st.session_state["ranked_candidate_market"] = market
-            st.write(f"Retrieved {len(assets)} observed histories out of {len(symbols)} candidates.")
-            status.update(label="Candidate batch loaded", state="complete", expanded=False)
+    symbols = tickers_for_sector(market, sector)
+    st.caption(f"Screening {len(symbols)} curated {market} {sector} candidates. "
+               "Selecting another category immediately recalculates its own ranking.")
+    refresh = st.button("↻ Refresh current category", key="refresh_category")
+    key = (market, sector)
+    if refresh or st.session_state.get("sector_loaded_key") != key:
+        with st.spinner(f"Loading {sector} stock prices…"):
+            try:
+                assets, errors = candidate_loader(tuple(symbols))
+            except Exception as exc:
+                assets, errors = [], [str(exc)]
+            st.session_state["sector_loaded_key"] = key
+            st.session_state["sector_assets"] = assets
+            st.session_state["sector_errors"] = errors
 
-    if st.session_state.get("ranked_candidate_market") != market:
-        note("Click Rank 10 stock ideas to load this market. No fabricated or fallback recommendations appear.")
-        return
-    assets = st.session_state.get("ranked_candidate_assets", [])
+    assets = st.session_state.get("sector_assets", [])
+    errors = st.session_state.get("sector_errors", [])
     if not assets:
-        st.info("No usable candidate prices returned. Check network access and try again.")
-        for message in st.session_state.get("ranked_candidate_errors", []):
-            st.caption(message)
+        note("No usable live stock data was received for this category. "
+             "Try again later or choose a different sector; rankings are never fabricated.")
+        with st.expander("Source errors", expanded=True):
+            for error in errors:
+                st.caption(error)
         return
 
-    ranked, excluded = rank_candidates(
-        portfolio=positions, candidates=assets, risk_preference=risk,
-        mode=mode, limit=10, preferred_sectors=preferred_sectors,
+    ranked, skipped = rank_sector_stocks(
+        portfolio=positions, candidates=assets,
+        sector=sector, risk_preference=risk, limit=10,
     )
     st.session_state["recommendations"] = ranked
+    flags_count = sum(bool(r["flags"]) for r in ranked)
     metrics([
-        ("CANDIDATES OBSERVED", str(len(assets)), f"Curated {market} stock universe"),
-        ("RANKED MATCHES", f"{len(ranked)} / 10", "Only passing all guardrails"),
-        ("SCREENED OUT", str(len(excluded)), "Risk, concentration, liquidity"),
-        ("RANKING STYLE", mode, f"{risk} risk preference"),
+        ("MARKET", market, "Exchange-listed equities"),
+        ("CATEGORY", sector, "Sector-specific list"),
+        ("RANKED STOCKS", f"{len(ranked)} / 10", "Observed stock histories only"),
+        ("RISK FLAGS", str(flags_count), "Visible, not silently removed"),
     ])
-    st.caption("Rank is an explainable relevance score, not expected performance. "
-               "If fewer than ten stocks pass the filters, fewer than ten are shown.")
-
-    benchmark_ticker = "^NSEI" if market == "India" else "^GSPC"
+    st.caption(
+        "Each category has its own ranking. The algorithm ranks using observed volatility, "
+        "history length, a recent-return component, and liquidity screening. "
+        "High-risk stocks remain visible with flags for comparison. "
+        "Ranks are NOT expected returns, financial advice, or a guarantee of suitability."
+    )
+    benchmark_symbol = "^NSEI" if market == "India" else "^GSPC"
     rf = .06 if market == "India" else .04
     try:
-        benchmark = benchmark_loader(benchmark_ticker)
+        benchmark = benchmark_loader(benchmark_symbol)
     except Exception as exc:
         benchmark = None
-        st.warning(f"Benchmark unavailable: {exc}. Alpha and beta cannot be calculated.")
+        st.caption(f"Benchmark temporarily unavailable: {exc}. Alpha and beta shown as —.")
 
-    by_symbol = {a["ticker"]: a for a in assets}
+    lookup = {asset["ticker"]: asset for asset in assets}
     table = []
-    for i, item in enumerate(ranked, start=1):
-        details = _stock_snapshot(by_symbol[item["ticker"]], benchmark, rf)
+    for rank, item in enumerate(ranked, 1):
+        details = _stock_snapshot(lookup[item["ticker"]], benchmark, rf)
         table.append({
-            "Rank": i, "Ticker": item["ticker"], "Sector": item["sector"],
-            "Score /100": round(item["score"], 1),
+            "Rank": rank,
+            "Stock": item["ticker"],
+            "Category": sector,
+            "Score / 100": item["score"],
             "1Y return": _pct(details["return_1y"]),
-            "Alpha": _pct(details["alpha"]), "Beta": _decimal(details["beta"]),
-            "Volatility": _unsigned(details["annual_volatility"]),
+            "Alpha": _pct(details["alpha"]),
+            "Beta": _decimal(details["beta"]),
             "Sharpe": _decimal(details["sharpe"]),
-            "Why selected": item["explanation"],
+            "Volatility": _unsigned(details["annual_volatility"]),
+            "Risk note": " · ".join(item["flags"]) if item["flags"] else "Within screening bands",
         })
-
-    st.markdown('<div class="wr-miniheading">TOP STOCK IDEAS / RANKING & METRICS</div>',
-                unsafe_allow_html=True)
-    if table:
-        st.dataframe(pd.DataFrame(table), hide_index=True, use_container_width=True,
-                     column_config={"Score /100": st.column_config.ProgressColumn(
-                         "Score /100", min_value=0, max_value=100, format="%.1f",
-                     )})
-        selected = st.selectbox(
-            "Inspect a recommended stock",
-            [row["Ticker"] for row in table],
-            format_func=lambda code: f"{next(row['Rank'] for row in table if row['Ticker'] == code):02d} · {code}",
+    if not table:
+        st.info("No stocks in this category have enough measured history to rank.")
+    else:
+        st.markdown('<div class="wr-miniheading">SECTOR TOP TEN / LIVE MEASURED DATA</div>',
+                    unsafe_allow_html=True)
+        st.dataframe(
+            pd.DataFrame(table), hide_index=True, use_container_width=True,
+            column_config={"Score / 100": st.column_config.ProgressColumn(
+                "Score / 100", min_value=0, max_value=100, format="%.1f"
+            )},
         )
-        item = next(r for r in ranked if r["ticker"] == selected)
-        recommendation_card(item, next(i for i, r in enumerate(ranked, start=1) if r["ticker"] == selected))
-        details = _stock_snapshot(by_symbol[selected], benchmark, rf)
-        _metric_row(details, by_symbol[selected], benchmark_ticker, rf)
-        period = st.radio("Price-history window", ["1W", "1M", "6M", "1Y", "5Y"],
-                          index=3, horizontal=True)
+        chosen = st.selectbox(
+            "Stock deep-dive", [row["Stock"] for row in table],
+            key=f"ranked_detail_{market}_{sector}",
+            format_func=lambda symbol: f"#{next(row['Rank'] for row in table if row['Stock'] == symbol)} · {symbol}",
+        )
+        entry = next(item for item in ranked if item["ticker"] == chosen)
+        recommendation_card(entry, next(i for i, item in enumerate(ranked, 1)
+                                        if item["ticker"] == chosen))
+        if entry["flags"]:
+            st.warning("Risk considerations: " + " · ".join(entry["flags"]))
+        asset = lookup[chosen]
+        detail = _stock_snapshot(asset, benchmark, rf)
+        _metric_row(detail, asset, benchmark_symbol, rf)
+        timeline, scaling = st.columns([1.25, 1], gap="medium")
+        with timeline:
+            period = st.radio("Price-history window", ["1W", "1M", "6M", "1Y", "5Y"],
+                              index=3, horizontal=True)
+        with scaling:
+            view = st.radio("Chart scale", ["Zoomed price", "Percentage change"],
+                            horizontal=True, key="category_chart_scale")
         with st.container(border=True):
             try:
                 st.plotly_chart(
-                    performance_chart(by_symbol[selected], period),
-                    use_container_width=True, key=f"idea_chart_{selected}_{period}",
+                    performance_chart(asset, period, view=view),
+                    use_container_width=True,
+                    key=f"category_chart_{chosen}_{period}_{view}",
                 )
             except ValueError as exc:
                 st.info(str(exc))
-    else:
-        note("No stocks passed the chosen risk profile and sector cap. "
-             "This is a valid screened result, not a fetch failure. "
-             "You can adjust your portfolio risk preference.")
 
-    with st.expander("Methodology, data failures and guardrail exclusions", expanded=False):
-        st.write("Curated liquid equity universe (not exhaustive). Scores use risk fit, "
-                 "exposure similarity/diversification, optional preferred sectors and "
-                 "concentration. Stocks must pass historical volatility and estimated "
-                 "median traded-value screens; a hypothetical 10% position is tested "
-                 "against a 45% sector-exposure limit.")
-        if excluded:
-            st.write("Screened out:")
-            for issue in excluded:
-                st.caption(issue)
-        for issue in st.session_state.get("ranked_candidate_errors", []):
-            st.caption(f"Market-data error: {issue}")
-    note("Market data from Yahoo Finance may be delayed. Alpha, beta, Sharpe and "
-         "historical returns are descriptive statistics, not forecasts or investment advice.")
+    with st.expander("Universe, scoring, and unavailable tickers", expanded=False):
+        st.write(
+            f"The {market} / {sector} category starts with {len(symbols)} "
+            "curated tickers. Stocks already owned, missing quotes, or without 60+ "
+            "observed returns are not ranked. When fewer than ten have usable "
+            "data, the screen reports the actual available count rather than inventing entries."
+        )
+        st.write(
+            "Score components: 61% risk-volatility fit, 17% liquidity, "
+            "12% observed history length, 10% bounded recent price return; "
+            "penalties are applied to risk-band breaches, illiquidity, and "
+            "portfolio concentration. This is a transparent, illustrative "
+            "screening formula, not a proven predictive model."
+        )
+        for problem in [*skipped, *errors]:
+            st.caption(problem)
+    note("Market prices may be delayed or inaccessible. Historical alpha, beta, "
+         "Sharpe and returns are descriptive statistics and never guaranteed forecasts.")

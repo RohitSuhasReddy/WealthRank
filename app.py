@@ -122,7 +122,7 @@ def display_portfolio() -> tuple[list[dict], str, list[str]]:
         try:
             starter = upload_data(uploaded) if uploaded else default_holdings()
             normalized = normalize_holdings(starter)
-            edit_frame = pd.DataFrame(normalized, columns=["Type", "Ticker", "Quantity", "Avg Buy Price"])
+            edit_frame = pd.DataFrame(normalized, columns=["Type", "Ticker", "Quantity", "Avg Buy Price", "Purchase Date"])
             edit_frame["Avg Buy Price"] = edit_frame["Avg Buy Price"].map(
                 lambda amount: format_inr(amount, decimals=True)
             )
@@ -137,6 +137,9 @@ def display_portfolio() -> tuple[list[dict], str, list[str]]:
                     "Avg Buy Price": st.column_config.TextColumn(
                         "Avg buy price (commas allowed)",
                         help="Examples: 1,250.00 or 1,25,000.00. Use quote currency.",
+                    ),
+                    "Purchase Date": st.column_config.TextColumn(
+                        "Purchase date", help="Optional YYYY-MM-DD.",
                     ),
                 },
             )
@@ -234,6 +237,7 @@ def display_analytics(positions: list[dict]) -> None:
         "Holding": p["name"], "Type": p["asset_class"],
         "Units": p["quantity"], "Last price / NAV (INR)": p["latest_inr"],
         "Position value (INR)": p["value_inr"], "As of": p["as_of"],
+        "Purchase Date": p.get("purchase_date", ""),
     } for p in positions])
     with st.expander("Show verified holding-level valuations", expanded=False):
         st.dataframe(holdings_table, hide_index=True, use_container_width=True)

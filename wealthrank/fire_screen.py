@@ -229,11 +229,20 @@ def render_fire(positions: list[dict]) -> None:
         f"versus the retirement spending goal of {_money(future_spending['monthly'])} per month."
     )
 
+    horizon = st.radio(
+        "Projection chart horizon",
+        ["Retirement + 10 years", "Full projection to age 100"],
+        horizontal=True, key="fire_chart_horizon",
+        help="Focus the default chart around retirement so growth early in life is not flattened by large future values.",
+    )
+    chart_data = (trajectory.loc[trajectory["Age"] <= min(100, target_age + 10)]
+                  if horizon.startswith("Retirement") else trajectory)
     with st.container(border=True):
         st.markdown('<div class="wr-panel-head">Net-worth and inflation-adjusted FIRE threshold</div>',
                     unsafe_allow_html=True)
-        st.plotly_chart(fire_projection_chart(trajectory, target_age),
-                        use_container_width=True, key="fire_growth")
+        st.plotly_chart(fire_projection_chart(chart_data, target_age),
+                        use_container_width=True,
+                        key=f"fire_growth_{horizon}")
     gap = retiring["Net worth"] - future_spending["corpus"]
     if gap >= 0:
         st.success(
