@@ -84,6 +84,29 @@ def verify(page, label: str) -> None:
     print(f"{label}: planets aligned; heading separated; screenshot captured.")
 
 
+
+def verify_uploaded_portfolio_survives_navigation(page) -> None:
+    """Real browser regression for the destroyed file_uploader widget bug."""
+    page.goto(URL, wait_until="domcontentloaded", timeout=60000)
+    page.get_by_role("button", name="Portfolio", exact=True).click()
+    page.locator('[data-testid="stFileUploader"] input[type="file"]').set_input_files({
+        "name": "my_holdings.csv",
+        "mimeType": "text/csv",
+        "buffer": (
+            b"Type,Ticker,Quantity,Avg Buy Price,Purchase Date\n"
+            b"Stock,AAPL,7,0,2025-04-15\n"
+            b"Stock,TSLA,4,0,2025-08-03\n"
+        ),
+    })
+    page.get_by_text("Current portfolio: my_holdings.csv", exact=False).wait_for(timeout=30000)
+    page.get_by_role("button", name="Model Lab", exact=True).click()
+    page.get_by_role("button", name="Portfolio", exact=True).click()
+    page.get_by_text("Current portfolio: my_holdings.csv", exact=False).wait_for(timeout=30000)
+    assert page.get_by_text("No sample stocks inserted.").count() == 0
+    page.screenshot(path=str(ARTIFACTS / "portfolio_retained.png"), full_page=True)
+    print("portfolio: uploaded file preserved after navigating away and back.")
+
+
 def wait_for_streamlit() -> None:
     for _ in range(90):
         try:
@@ -111,6 +134,7 @@ def main() -> None:
             desktop.screenshot(path=str(ARTIFACTS / "fire.png"), full_page=True)
             mobile = browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=1)
             verify(mobile, "mobile")
+            verify_uploaded_portfolio_survives_navigation(desktop)
         finally:
             browser.close()
 
