@@ -79,7 +79,7 @@ def inject_navigation_css() -> None:
 [data-testid="stAppViewContainer"]::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse 32% 35% at 6% 18%,rgba(143,36,7,.16),transparent),radial-gradient(ellipse 42% 45% at 99% 76%,rgba(210,58,0,.08),transparent);animation:wr-liquid 19s ease-in-out infinite alternate;filter:blur(27px)}
 [data-testid="stMain"]{position:relative;z-index:1}
 @keyframes wr-arrive{from{opacity:0;transform:translateY(21px);filter:blur(7px)}to{opacity:1;transform:translateY(0);filter:blur(0)}}
-@keyframes wr-float{0%,100%{translate:0 0}50%{translate:0 -8px}}
+@keyframes wr-float{0%,100%{filter:brightness(1)}50%{filter:brightness(1.22)}}
 @keyframes wr-breathe{0%,100%{filter:brightness(1)}50%{filter:brightness(1.16)}}
 @keyframes wr-ring{0%,100%{transform:rotate(-27deg)}50%{transform:rotate(-24deg) skewY(3deg)}}
 @keyframes wr-liquid{0%{transform:translate(-2%,1%) scale(1)}50%{transform:translate(4%,-5%) scale(1.12)}100%{transform:translate(-1%,5%) scale(1.07)}}
