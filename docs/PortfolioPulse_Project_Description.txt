@@ -1,0 +1,203 @@
+================================================================================
+PROJECT TITLE: PortfolioPulse
+(Personalized Portfolio Analytics + Recommendation Engine + FIRE Calculator)
+================================================================================
+
+Version: 1.0
+Target Role: StockGro ML / Data Science Summer Internship
+Tech Stack: Python, Streamlit, yfinance, mfapi.in / mftool, Plotly / ECharts
+Data Policy: 100% free public APIs only — no paid services
+
+--------------------------------------------------------------------------------
+1. ONE-LINE SUMMARY
+--------------------------------------------------------------------------------
+A polished personal-finance web app where a user inputs their current stock + 
+mutual-fund portfolio and risk preference, receives risk analytics + personalized 
+recommendations of similar / complementary instruments, views interactive 
+performance charts (1W / 1M / 6M / 1Y / 5Y), and runs a full inflation-adjusted 
+FIRE (Financial Independence, Retire Early) calculator.
+
+--------------------------------------------------------------------------------
+2. WHY THIS PROJECT FITS THE STOCKGRO ML JD
+--------------------------------------------------------------------------------
+Closes the biggest gaps identified earlier:
+
+• Personalisation & Recommendations     → Hybrid ranking based on holdings + risk
+• Proper Evaluation of models/features  → Offline ranking metrics + ablation
+• Guardrails                            → Risk filters, concentration caps, liquidity
+• Experimentation / A/B testing         → Simulated A/B of ranking strategies
+• Strong market data pipelines          → Clean multi-source ingestion (stocks + MFs)
+
+Also demonstrates product thinking (risk analytics + FIRE) that finance platforms value.
+
+--------------------------------------------------------------------------------
+3. CORE FEATURES
+--------------------------------------------------------------------------------
+
+A. Portfolio Input
+   - Manual entry of tickers / scheme names (stocks + Indian mutual funds)
+   - Optional Excel / CSV upload (Ticker | Quantity | Avg Buy Price)
+   - Risk preference selector (Conservative / Moderate / Aggressive)
+   - Optional preferred sectors / asset classes
+
+B. Portfolio Risk Analytics Dashboard
+   - Current allocation (pie / donut charts)
+   - Portfolio volatility, approximate beta, concentration risk
+   - Sector / category breakdown
+   - Simple risk score (0–100) with colour coding
+   - Key metrics cards with subtle animations on load
+
+C. Personalized Recommendations
+   - Ranked list of stocks + mutual funds similar to current holdings
+   - Score + short explanation (“Similar sector exposure”, “Lower volatility 
+     match for your risk profile”, “Complementary large-cap diversification”)
+   - Basic guardrails applied (liquidity filter, max sector concentration, 
+     risk-band matching)
+   - Toggle between “Similar” vs “Diversifying” recommendation modes
+
+D. Interactive Performance Charts
+   - For any selected holding or recommended instrument:
+     • Price / NAV line chart with period selectors: 1W | 1M | 6M | 1Y | 5Y
+     • Returns table for the same periods (absolute + annualised where relevant)
+   - Smooth transitions when switching periods
+   - Hover tooltips, zoom, and clean dark/light friendly styling
+
+E. FIRE Calculator (Mathematical Core)
+   Inputs (user-controlled):
+   - Current age
+   - Current monthly expenses
+   - Current net worth / portfolio value
+   - Expected real return from portfolio (or auto-suggested from holdings)
+   - Monthly SIP amount
+   - Expected inflation rate (%)
+   - Target retirement age or “years to FIRE”
+
+   Outputs:
+   - Years required to reach FIRE corpus
+   - Projected corpus at retirement (inflation-adjusted)
+   - Required corpus today (present value)
+   - Safe withdrawal rate view
+   - Interactive growth chart (corpus over time with and without inflation)
+   - Sensitivity analysis (what-if higher SIP / lower expenses)
+
+F. UI / UX Requirements
+   - Modern, clean Streamlit interface with proper visual hierarchy
+   - Smooth page transitions and component animations (fade / slide on load)
+   - Interactive charts (Plotly or ECharts) with period toggles
+   - Responsive layout (desktop-first, mobile usable)
+   - Loading states and skeleton placeholders while data fetches
+   - Fonts and exact colour theme left open for final decision
+   - Professional, finance-product feel (not a student toy)
+
+--------------------------------------------------------------------------------
+4. DATA SOURCES (ALL FREE – NO PAID APIs)
+--------------------------------------------------------------------------------
+
+Stocks (India + US)
+• Primary: yfinance
+  - Indian equities: RELIANCE.NS, INFY.NS, etc.
+  - US equities: AAPL, MSFT, etc.
+  - Free, no API key, sufficient for project-scale usage
+
+Indian Mutual Funds
+• Primary recommendation: mfapi.in (https://api.mfapi.in)
+  - Completely free, no authentication, no hard rate limits for normal use
+  - Scheme search, latest NAV, full historical NAV
+  - Updated multiple times daily
+• Backup / alternative: mftool Python library (wraps AMFI data)
+• Official source: AMFI daily NAV files (can be parsed directly if needed)
+
+All data required for charts (1W–5Y), returns, risk metrics, and recommendations 
+can be obtained from the above free sources.
+
+--------------------------------------------------------------------------------
+5. TECHNICAL ARCHITECTURE (HIGH LEVEL)
+--------------------------------------------------------------------------------
+
+Frontend / App Layer
+• Streamlit multi-page or tabbed app
+• Custom CSS + Streamlit components for animations and transitions
+• Plotly / st.echarts_chart for interactive charts
+
+Data Layer
+• yfinance for equities
+• mfapi.in (requests) or mftool for Indian mutual funds
+• Local caching (st.cache_data) to avoid repeated API calls
+
+Analytics Layer
+• Portfolio risk calculations (volatility, weights, concentration)
+• Similarity / ranking logic (content-based on sector, volatility, returns profile)
+• Optional light hybrid scoring
+• Offline evaluation harness (Precision@K, simple NDCG, ablation)
+
+FIRE Engine
+• Pure mathematical module (future-value of SIP + corpus, inflation adjustment)
+• No external dependencies beyond numpy / pandas
+
+--------------------------------------------------------------------------------
+6. EVALUATION & ML-ORIENTED COMPONENTS (FOR RESUME)
+--------------------------------------------------------------------------------
+Even though the core is product-focused, the project includes:
+
+• Ranking evaluation (hold-out style or simulated user profiles)
+• Feature ablation (impact of removing sector vs volatility features)
+• Simulated A/B test of two ranking strategies with lift calculation
+• Explicit guardrail logic (risk matching + concentration limits)
+
+These elements demonstrate the missing JD skills (evaluation + experimentation).
+
+--------------------------------------------------------------------------------
+7. DELIVERABLES FOR GITHUB & RESUME
+--------------------------------------------------------------------------------
+• Clean repository with clear folder structure
+• Detailed README containing:
+  - Problem statement
+  - Architecture diagram
+  - Screenshots / GIFs of UI (especially charts + transitions)
+  - Metrics tables from evaluation
+  - How to run locally
+• Working Streamlit demo (local or Streamlit Cloud)
+• Short video walkthrough (optional but highly recommended)
+
+Resume bullets (examples):
+• Built PortfolioPulse – an end-to-end personalized stock & mutual-fund 
+  recommendation system with risk analytics, interactive multi-horizon charts, 
+  and inflation-adjusted FIRE calculator using only free market data APIs.
+• Implemented ranking evaluation (Precision@K / NDCG) and simulated A/B testing 
+  of recommendation strategies; added risk-based guardrails for concentration 
+  and liquidity.
+• Designed polished Streamlit UI with smooth transitions, period-selectable 
+  performance charts (1W–5Y), and real-time portfolio risk visualisation.
+
+--------------------------------------------------------------------------------
+8. SCOPE CONTROL (INTERNSHIP-REALISTIC)
+--------------------------------------------------------------------------------
+Must-have (focus on these):
+• Portfolio input (manual + Excel)
+• Risk analytics dashboard
+• Recommendation list with explanations + basic guardrails
+• Interactive charts (1W / 1M / 6M / 1Y / 5Y) + returns
+• Full FIRE calculator with inflation adjustment
+• Clean, animated UI
+
+Nice-to-have (add only if time permits):
+• Advanced hybrid model or embeddings
+• Real user feedback loop
+• Live deployment with authentication
+
+--------------------------------------------------------------------------------
+9. FINAL CONFIRMATION ON FREE APIs
+--------------------------------------------------------------------------------
+Yes — every feature listed above (stocks India/US, Indian mutual funds, historical 
+NAV/price for 1W–5Y charts, returns calculation, risk metrics, recommendations) 
+can be fully achieved using only free public data sources:
+
+• yfinance          → Equities (India + US)
+• mfapi.in / mftool → Indian mutual funds (search + full NAV history)
+• AMFI public files → Official backup for mutual-fund NAVs
+
+No paid API keys or commercial data vendors are required.
+
+================================================================================
+END OF PROJECT DESCRIPTION
+================================================================================
