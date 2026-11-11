@@ -53,6 +53,10 @@ def verify(page, label: str) -> None:
     )
     for name, rectangle in planets.items():
         assert not overlaps(heading, rectangle), f"{name} overlaps title"
+        if label == "desktop":
+            assert rectangle["y"] + rectangle["height"] <= page.viewport_size["height"] - 8, (
+                f"{name} should fit in the opening viewport without scrolling: {rectangle}"
+            )
         assert not overlaps(sun, rectangle), f"{name} overlaps sun"
         assert rectangle["x"] >= -2 and rectangle["x"] + rectangle["width"] <= page.viewport_size["width"] + 2, (
             f"{name} overflows horizontally: {rectangle}"
