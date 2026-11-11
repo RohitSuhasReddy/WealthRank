@@ -30,6 +30,7 @@ from wealthrank.navigation import (
 )
 from wealthrank.screens import ranked_discovery, stock_analytics
 from wealthrank.networth import net_worth_breakdown
+from wealthrank.fire_screen import render_fire
 from wealthrank.theme import footer, inject_css, metrics, note, section
 
 
@@ -245,132 +246,8 @@ def display_analytics(positions: list[dict]) -> None:
 
 
 def display_fire(positions: list[dict]) -> None:
-    section(
-        "fire", "05", "FINANCIAL INDEPENDENCE", "Make the future<br><em>feel tangible.</em>",
-        "Model net worth, the inflation-adjusted retirement target and the purchasing power of your savings.",
-    )
-    portfolio_value = sum(p["value_inr"] for p in positions)
-    networth_total = st.session_state.get("net_worth_total")
-    capital_choices = ["Enter manually"]
-    if positions:
-        capital_choices.insert(0, "Investment portfolio")
-    if networth_total is not None and networth_total >= 0:
-        capital_choices.insert(0, "Total net worth")
-    capital_choice = st.radio(
-        "Choose capital to project", capital_choices, horizontal=True,
-        help="Returns on illiquid property and non-investment assets should not be treated as guaranteed.",
-    )
-    with st.container(border=True):
-        left, right = st.columns(2, gap="large")
-        with left:
-            st.markdown('<div class="wr-miniheading">LIFE & SPENDING</div>', unsafe_allow_html=True)
-            age = st.slider("Current age", min_value=18, max_value=80, value=29)
-            retire_age = st.slider("Target retirement age", min_value=age + 1, max_value=100,
-                                   value=min(100, max(55, age + 15)))
-            expenses_text = st.text_input(
-                "Current monthly expenses (₹)", value="65,000",
-                help="Enter 65,000 or 6,50,000. Both Indian and western comma grouping work.",
-                key="fire_expenses_text",
-            )
-            withdrawal = st.slider("Assumed annual withdrawal rate (%)", 2.0, 6.0, 4.0, .25)
-        with right:
-            st.markdown('<div class="wr-miniheading">CAPITAL & ASSUMPTIONS</div>', unsafe_allow_html=True)
-            if capital_choice == "Total net worth":
-                wealth = float(networth_total)
-                st.metric("Whole net worth (₹)", currency(wealth, compact=False))
-                st.caption("Includes user-entered asset estimates. Do not assume property or "
-                           "other non-investible assets earn the portfolio return.")
-            elif capital_choice == "Investment portfolio":
-                wealth = portfolio_value
-                st.metric("Investable holdings (₹)", currency(wealth, compact=False))
-            else:
-                wealth_text = st.text_input(
-                    "Starting net worth / investable corpus (₹)", value="25,00,000",
-                    help="Commas allowed: 25,00,000", key="fire_wealth_text",
-                )
-            sip_text = st.text_input(
-                "Monthly investment / SIP (₹)", value="25,000",
-                help="Commas allowed: 25,000", key="fire_sip_text",
-            )
-            nominal = st.slider("Expected nominal annual return (%)", -10.0, 25.0, 10.0, .5)
-            inflation = st.slider("Expected annual inflation (%)", 0.0, 15.0, 6.0, .5)
-            step_up = st.slider("Annual SIP increase (%)", 0.0, 20.0, 0.0, 1.0)
-
-    try:
-        expenses = parse_inr(expenses_text)
-        if capital_choice == "Enter manually":
-            wealth = parse_inr(wealth_text)
-        sip = parse_inr(sip_text)
-    except ValueError as exc:
-        st.error(f"Invalid rupee amount: {exc}")
-        return
-
-    assumptions = FireInputs(
-        current_age=age, monthly_expenses=expenses, net_worth=wealth,
-        annual_return=nominal / 100, inflation=inflation / 100,
-        monthly_sip=sip, withdrawal_rate=withdrawal / 100,
-        sip_step_up=step_up / 100,
-    )
-    try:
-        projection, years_to_fire = project_fire(assumptions, years=100 - age)
-        retiring = retirement_snapshot(projection, retire_age)
-        target_now = fire_target_today(assumptions)
-    except ValueError as exc:
-        st.error(f"Cannot calculate FIRE scenario: {exc}")
-        return
-    fire_year = "Not by age 100" if years_to_fire is None else (
-        "Already reached" if years_to_fire == 0 else f"{years_to_fire:.1f} yrs"
-    )
-    metrics([
-        ("FIRE TARGET TODAY", currency(target_now), "Current annual spending ÷ withdrawal rate"),
-        ("NET WORTH AT TARGET AGE", currency(retiring["Net worth"]), f"Nominal · age {retire_age}"),
-        ("VALUE IN TODAY'S RUPEES", currency(retiring["Today's rupees"]), "Deflated by projected inflation"),
-        ("TIME TO FIRE", fire_year, "Monthly crossing · if target is reached"),
-    ])
-    st.markdown('<div class="wr-panel-head">Net worth projection / nominal, real & FIRE threshold</div>',
-                unsafe_allow_html=True)
-    with st.container(border=True):
-        st.plotly_chart(fire_projection_chart(projection, retire_age),
-                        use_container_width=True, key="fire_growth")
-    projected_target = retiring["FIRE target"]
-    difference = retiring["Net worth"] - projected_target
-    if difference >= 0:
-        st.success(f"At age {retire_age}, your modelled corpus exceeds the inflation-adjusted "
-                   f"target by {currency(difference)}.")
-    else:
-        st.warning(f"At age {retire_age}, the modelled corpus is {currency(abs(difference))} "
-                   "below the projected FIRE target.")
-    st.caption(f"Implied REAL annual return: {real_return(assumptions.annual_return, assumptions.inflation):.2%}. "
-               "Return is a constant assumption, not a forecast; actual returns and withdrawal outcomes vary.")
-
-    st.markdown('<div class="wr-miniheading">WHAT-IF SCENARIOS</div>', unsafe_allow_html=True)
-    what_if = st.radio(
-        "Explore a change", ["Increase monthly SIP by 20%", "Reduce monthly expenses by 10%"],
-        horizontal=True,
-    )
-    adjusted = (
-        replace(assumptions, monthly_sip=sip * 1.2)
-        if what_if.startswith("Increase")
-        else replace(assumptions, monthly_expenses=expenses * .9)
-    )
-    new_projection, new_time = project_fire(adjusted, years=100 - age)
-    with st.container(border=True):
-        st.plotly_chart(
-            comparison_chart(projection, new_projection, "Base plan", what_if),
-            use_container_width=True, key="fire_sensitivity",
-        )
-    time_string = "not reached by age 100" if new_time is None else f"{new_time:.1f} years"
-    st.caption(f"Scenario crosses the FIRE threshold in {time_string}. "
-               "Reducing expenses changes the FIRE target, not the net-worth line.")
-    with st.expander("Calculation method and assumptions", expanded=False):
-        st.markdown(
-            "Monthly compounding uses \\(r_m=(1+r_{annual})^{1/12}-1\\) with SIP contributions "
-            "at month-end. The FIRE threshold grows with projected spending inflation; "
-            "real net worth discounts the nominal balance back to today's rupees."
-        )
-        st.latex(r"\mathrm{FIRE\ target}_{t}=\frac{12\cdot\mathrm{monthly\ expenses}\cdot(1+\pi)^t}{\mathrm{withdrawal\ rate}}")
-        st.markdown("Withdrawal rates are planning assumptions, not guaranteed safe outcomes. "
-                    "Taxes, investment costs, sequence risk and changing spending are not modelled.")
+    """Render the FIRE planner as a separate full-screen experience."""
+    render_fire(positions)
 
 
 def display_lab() -> None:
