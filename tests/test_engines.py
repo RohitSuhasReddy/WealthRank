@@ -6,7 +6,7 @@ import pytest
 
 from wealthrank.analytics import PERIODS, allocation, period_returns, risk_metrics
 from wealthrank.evaluation import ndcg_at_k, precision_at_k, run_synthetic_lab
-from wealthrank.fire import FireInputs, fire_target_today, project_fire, real_return
+from wealthrank.fire import FireInputs, fire_target_today, project_fire, real_return, retirement_expenses, first_year_withdrawal
 
 
 BASE = FireInputs(current_age=25, monthly_expenses=50_000, net_worth=1_000_000,
@@ -65,3 +65,29 @@ def test_ranking_and_repeatability():
     assert ndcg_at_k(relevance, ranks, 2) == pytest.approx(1)
     assert precision_at_k(relevance, ranks, 2) == 1
     assert run_synthetic_lab() == run_synthetic_lab()
+
+
+def test_retirement_expenses_preserve_real_lifestyle():
+    future = retirement_expenses(BASE, retirement_age=55)
+    expected_monthly = BASE.monthly_expenses * (1 + BASE.inflation) ** 30
+    assert future["monthly"] == pytest.approx(expected_monthly)
+    assert future["annual"] == pytest.approx(expected_monthly * 12)
+    assert future["corpus"] == pytest.approx(future["annual"] / BASE.withdrawal_rate)
+    assert future["corpus"] == pytest.approx(fire_target_today(BASE) * (1 + BASE.inflation) ** 30)
+
+
+def test_expenses_stay_unchanged_without_inflation():
+    flat = replace(BASE, inflation=0)
+    result = retirement_expenses(flat, retirement_age=60)
+    assert result["monthly"] == flat.monthly_expenses
+    assert result["annual"] == flat.monthly_expenses * 12
+
+
+def test_withdrawal_rate_is_budget_not_inflation():
+    corpus = 25_000_000
+    assert first_year_withdrawal(corpus, .04) == 1_000_000
+    assert first_year_withdrawal(corpus, .03) == 750_000
+    with pytest.raises(ValueError):
+        first_year_withdrawal(corpus, 0)
+    with pytest.raises(ValueError):
+        retirement_expenses(BASE, retirement_age=BASE.current_age)
