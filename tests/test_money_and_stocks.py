@@ -52,3 +52,37 @@ from wealthrank.data import normalize_holdings
 def test_portfolio_accepts_comma_separated_buy_price():
     frame = pd.DataFrame([{"Type": "Stock", "Ticker": "INFY.NS", "Quantity": 3, "Avg Buy Price": "1,250.50"}])
     assert normalize_holdings(frame)[0]["Avg Buy Price"] == pytest.approx(1250.5)
+
+
+def test_candidate_batch_handles_multi_ticker_download(monkeypatch):
+    from wealthrank.data import fetch_stock_batch
+    dates = pd.bdate_range(end=pd.Timestamp.now().normalize(), periods=130)
+    symbols = ["INFY.NS", "MSFT"]
+    columns = pd.MultiIndex.from_product([symbols, ["Close", "Volume"]])
+    frame = pd.DataFrame(index=dates, columns=columns, dtype=float)
+    for ticker in symbols:
+        frame[(ticker, "Close")] = np.linspace(100, 150, len(dates))
+        frame[(ticker, "Volume")] = np.ones(len(dates)) * 2_000_000
+    monkeypatch.setattr("wealthrank.data.yf.download", lambda **kwargs: frame)
+    values, errors = fetch_stock_batch(symbols)
+    assert not errors
+    assert [x["ticker"] for x in values] == symbols
+    assert values[0]["currency"] == "INR"
+    assert values[1]["currency"] == "USD"
+    assert len(values[0]["close"]) == 130
+
+
+def test_ranker_returns_ten_when_ten_pass_screens():
+    from wealthrank.recommendations import rank_candidates
+    dates = pd.bdate_range(end=pd.Timestamp.now().normalize(), periods=130)
+    closes = pd.Series(100 + 7 * np.sin(np.arange(130) / 10), index=dates)
+    universe = [{
+        "ticker": f"CANDIDATE{i}.NS", "name": f"Stock {i}", "asset_class": "Stock",
+        "sector": "Technology", "currency": "INR", "close": closes,
+        "volume": pd.Series([1_000_000] * 130, index=dates),
+        "source": "synthetic test fixture", "as_of": str(dates[-1].date()),
+    } for i in range(13)]
+    holdings = [{"ticker": "SECTOR.NS", "sector": "Consumer", "value_inr": 1000}]
+    ranked, excluded = rank_candidates(holdings, universe, "Moderate", mode="Similar", limit=10)
+    assert len(ranked) == 10
+    assert ranked[0]["score"] >= ranked[-1]["score"]
