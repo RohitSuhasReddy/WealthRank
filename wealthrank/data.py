@@ -8,6 +8,8 @@ import pandas as pd
 import requests
 import yfinance as yf
 
+from wealthrank.catalog import sector_map
+
 from wealthrank.money import parse_inr
 
 
@@ -45,6 +47,9 @@ STOCK_SECTORS = {
     "KO": "Consumer", "PEP": "Consumer", "DIS": "Communication",
     "CVX": "Energy", "CAT": "Industrials", "GE": "Industrials",
 }
+
+# Category rankings and portfolio holdings share one curated sector map.
+STOCK_SECTORS.update(sector_map())
 
 
 def _series(values: pd.Series) -> pd.Series:
