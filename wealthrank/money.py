@@ -41,3 +41,11 @@ def format_inr(amount: float, decimals: bool = False) -> str:
             pairs.append(head)
         integer = ",".join(reversed(pairs)) + "," + tail
     return sign + integer + ("." + fraction if decimals else "")
+
+
+def parse_signed_inr(value: str) -> float:
+    """Signed net worth is allowed; positive asset/debt entry uses parse_inr."""
+    cleaned = str(value).strip()
+    if cleaned.startswith("-"):
+        return -parse_inr(cleaned[1:].strip())
+    return parse_inr(cleaned)
