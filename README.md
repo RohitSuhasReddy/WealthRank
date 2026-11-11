@@ -38,7 +38,7 @@ Use the editable example holdings or upload a CSV / XLSX with `Ticker`, `Quantit
 
 ```bash
 python -m pip install -r requirements-dev.txt
-pytest -q
+python -m pytest -q
 ```
 
 Prices / NAVs are fetched on demand and may be delayed or unavailable. FIRE projections are hypothetical. Recommendations are rule-based educational matches, not investment advice. The model lab uses **synthetic** profiles and clicks, not real A/B-test results.
