@@ -25,7 +25,7 @@ from wealthrank.evaluation import run_synthetic_lab
 from wealthrank.fire import FireInputs, fire_target_today, project_fire, real_return, retirement_snapshot
 from wealthrank.money import format_inr, parse_inr
 from wealthrank.navigation import (
-    current_page, home_return, inject_navigation_css,
+    current_page, home_return, home_brand, inject_navigation_css,
     page_header, top_navigation, universe,
 )
 from wealthrank.screens import ranked_discovery, stock_analytics
@@ -288,12 +288,13 @@ def display_lab() -> None:
 def main() -> None:
     inject_css()
     inject_navigation_css()
-    top_navigation()
     page = current_page()
     positions = st.session_state.get("positions", [])
     if page == "home":
+        home_brand()
         universe()
     else:
+        top_navigation()
         headers = {
             "portfolio": ("01", "Know your <em>net worth.</em>",
                           "Import holdings, review live valuations, allocations and total portfolio risk."),
