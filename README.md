@@ -32,7 +32,7 @@ streamlit run app.py
 
 Open **http://localhost:8501**. Click a planet to open a screen. Import the sample holdings or upload a CSV/XLSX with `Ticker`, `Quantity`, optional `Avg Buy Price` and `Type` (Stock / Mutual fund). Yahoo Finance tickers and AMFI scheme codes are supported. Click **Analyse my portfolio** to fetch quotes, then **Discover** to rank up to ten eligible stocks.
 
-Net-worth and FIRE monetary text fields accept Indian commas, e.g. `25,00,000`.
+The **Portfolio → Net Worth** screen supports either a directly entered total or a detailed asset/debt breakdown. In **FIRE**, choose starting capital from manual entry, verified investments, total net worth, or selected assets. Switch between **Type exact values** and **Quick sliders**. Rupee inputs accept Indian commas such as `25,00,000`. The FIRE screen shows inflation-adjusted monthly and yearly retirement expenses separately from the chosen annual withdrawal-rate assumption.
 
 ## Tests
 
