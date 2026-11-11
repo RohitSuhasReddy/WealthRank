@@ -95,8 +95,8 @@ def main() -> None:
             verify(desktop, "desktop")
             desktop.get_by_role("button", name="04 · FIRE").click()
             desktop.get_by_text("YOUR EXPECTED EXPENSES AT RETIREMENT").wait_for(timeout=30000)
-            desktop.get_by_label("Monthly expenses today (₹)").fill("1,00,000")
-            desktop.get_by_label("Monthly expenses today (₹)").press("Tab")
+            desktop.get_by_role("textbox", name="Monthly expenses today (₹)").fill("1,00,000")
+            desktop.get_by_role("textbox", name="Monthly expenses today (₹)").press("Tab")
             desktop.wait_for_timeout(800)
             assert desktop.get_by_text("MONTHLY AT RETIREMENT").count() > 0
             desktop.screenshot(path=str(ARTIFACTS / "fire.png"), full_page=True)
