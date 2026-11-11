@@ -188,7 +188,7 @@ def page_header(number: str, title: str, subtitle: str) -> None:
 def universe() -> None:
     st.markdown(
         '<div class="wr-space-head">'
-        '<div class="wr-space-overline">YOUR FINANCIAL UNIVERSE</div>'
+        '<div class="wr-space-overline">TECHNOLOGY CRAFTED FOR ALL. NOT MACHINES.</div>'
         '<h1 class="wr-space-title">Wealth, in <em>orbit.</em></h1>'
         '<p class="wr-space-sub">One universe. Five independent experiences. '
         'Choose a planet to understand your portfolio, explore new ideas or plot your financial independence.</p>'
