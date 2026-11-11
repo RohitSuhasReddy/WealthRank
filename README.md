@@ -1,14 +1,24 @@
 # WealthRank
 
-An interactive personal-finance application with an animated **solar-system navigation**. The five standalone screens are **Portfolio**, **Stock Analytics**, **Discover**, **FIRE Planner**, and **Model Lab**.
+**Know your portfolio. Understand your risk. Plan your financial future.**
 
-Built with Python, Streamlit, Plotly, yfinance and MFapi.in. No paid API keys.
+WealthRank is a Python + Streamlit personal-finance dashboard for Indian and US stocks and Indian mutual funds. Its animated solar-system homepage opens five independent workspaces.
 
-## Run
+## What it does
 
-Python 3.10+.
+- **Portfolio & Net Worth:** Import CSV/Excel holdings, edit quantities and purchase dates, view valuations and asset allocation, and calculate net worth from assets and liabilities or a single entered total.
+- **Stock Analytics:** Inspect each holding's historical returns, alpha, beta, volatility, Sharpe ratio, drawdown, and interactive price or percentage-change charts.
+- **Discover:** Choose **India / US → sector** for up to **10 ranked stocks per category**. See risk flags and performance metrics; stocks you already hold are highlighted separately.
+- **FIRE Planner:** Estimate inflation-adjusted retirement expenses and required corpus, project net worth, and compare SIP and spending scenarios. Enter exact values or use sliders.
+- **Model Lab:** Explore offline ranking metrics, feature ablations, and a **synthetic** A/B simulation (not real user experiment results).
 
-**Windows PowerShell**
+Market prices are fetched from **Yahoo Finance** (`yfinance`) and Indian mutual-fund NAVs from **MFapi.in / AMFI**. Interactive charts use **Plotly**. No paid API keys are required.
+
+## First-time setup
+
+Requires **Python 3.10+** and **Git**.
+
+**Windows (PowerShell)**
 
 ```powershell
 git clone https://github.com/RohitSuhasReddy/WealthRank.git
@@ -16,7 +26,7 @@ cd WealthRank
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
 **macOS / Linux**
@@ -27,20 +37,42 @@ cd WealthRank
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
-Open **http://localhost:8501**. Click a planet to open a screen. Import the sample holdings or upload a CSV/XLSX with `Ticker`, `Quantity`, optional `Avg Buy Price`, `Purchase Date`, and `Type` (Stock / Mutual fund). Yahoo Finance tickers and AMFI scheme codes are supported. Click **Analyse my portfolio** to fetch quotes, then **Discover → market → category** to rank up to ten observed stocks per sector. Sample quantities and dates are fictional; sample purchase prices are intentionally blank.
+Open **http://localhost:8501**. Stop the server with **Ctrl+C**.
 
-The **Portfolio → Net Worth** screen supports either a directly entered total or a detailed asset/debt breakdown. In **FIRE**, choose starting capital from manual entry, verified investments, total net worth, or selected assets. Switch between **Type exact values** and **Quick sliders**. Rupee inputs accept Indian commas such as `25,00,000`. The FIRE screen shows inflation-adjusted monthly and yearly retirement expenses separately from the chosen annual withdrawal-rate assumption.
+## Later launches
 
-## Tests
+Open a terminal in your existing `WealthRank` folder; **do not clone or recreate the environment again**.
+
+**Windows (PowerShell)**
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m streamlit run app.py
+```
+
+**macOS / Linux**
+
+```bash
+source .venv/bin/activate
+python -m streamlit run app.py
+```
+
+To get new changes, run `git pull origin main` from the project folder before launching. If dependencies changed, run `python -m pip install -r requirements.txt` again.
+
+## Add a portfolio
+
+Open **Portfolio**, upload a `.csv` or `.xlsx`, or add rows manually. Required columns: `Ticker`, `Quantity`. Optional: `Type` (`Stock` / `Mutual fund`), `Avg Buy Price`, `Purchase Date` (`YYYY-MM-DD`). Use Yahoo Finance tickers (e.g. `INFY.NS`, `AAPL`) or AMFI scheme codes for funds. A small example CSV is available at [`examples/portfolio.csv`](examples/portfolio.csv).
+
+Click **Analyse my portfolio** to fetch prices and open Analytics. Uploaded and edited holdings are retained **while the current Streamlit session is active**, not permanently stored across server restarts.
+
+## Testing
 
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Market data may be unavailable or delayed. Rankings are transparent heuristic matches, **not** investment advice. Alpha/beta and other historical metrics are descriptive, not predictive. FIRE is a modelled scenario; Model Lab experiments use **synthetic** data.
-
-Charts include a zoomed price axis and percentage-change mode; FIRE projections open at a retirement-focused horizon.
+> **Note:** Quotes and NAVs can be delayed or unavailable. Ranking scores are explainable screening heuristics, not buy recommendations or return forecasts. Historical metrics do not predict future results. FIRE values are hypothetical and do not guarantee retirement outcomes.
